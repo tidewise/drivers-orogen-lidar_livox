@@ -11,6 +11,8 @@ import_types_from "lidar_livoxTypes.hpp"
 # conventions, a common use-case would be:
 #
 # using_library "lidar_livox"
+using_library "lidar_livox_sdk"
+using_library "jsoncpp", typekit: false
 # import_types_from "lidar_livox/CustomType.hpp"
 
 # If this project uses data types that are defined in other oroGen projects,
@@ -37,7 +39,7 @@ task_context "Task" do
     # Data can be retrieved using _input.read(value), which returns true if data
     # was available, and false otherwise. _input.connected() returns if this
     # input is connected to an output or not.
-    input_port "input", "/std/string"
+    # input_port "input", "/std/string"
 
     # An output port, i.e. an object to which the component pushes data so that
     # it is transmitted to other components' inputs
