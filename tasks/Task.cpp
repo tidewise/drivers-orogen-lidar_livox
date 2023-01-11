@@ -2,45 +2,35 @@
 
 #include "Task.hpp"
 #include "json/json.h"
-#include <fstream>
 #include <base-logging/Logging.hpp>
+#include <base/Time.hpp>
+#include <fstream>
+
+using namespace std;
+using namespace lidar_livox;
 
 void PointCloudCallback(uint32_t handle,
     const uint8_t dev_type,
     LivoxLidarEthernetPacket* data,
-    void* client_data)
+    void* task)
 {
     if (data == nullptr) {
         return;
     }
-    printf("point cloud handle: %u, data_num: %d, data_type: %d, length: %d, "
-           "frame_counter: %d\n",
-        handle,
-        data->dot_num,
-        data->data_type,
-        data->length,
-        data->frame_cnt);
-
-    if (data->data_type == kLivoxLidarCartesianCoordinateHighData) {
-        LivoxLidarCartesianHighRawPoint* p_point_data =
-            (LivoxLidarCartesianHighRawPoint*)data->data;
-        for (uint32_t i = 0; i < data->dot_num; i++) {
-            std::cout << p_point_data[i].x << p_point_data[i].y << p_point_data[i].z
-                      << std::endl;
-        }
-    }
-    else if (data->data_type == kLivoxLidarCartesianCoordinateLowData) {
-        LivoxLidarCartesianLowRawPoint* p_point_data =
-            (LivoxLidarCartesianLowRawPoint*)data->data;
-        std::cout << p_point_data[0].x;
-    }
-    else if (data->data_type == kLivoxLidarSphericalCoordinateData) {
-        LivoxLidarSpherPoint* p_point_data = (LivoxLidarSpherPoint*)data->data;
-        std::cout << p_point_data[0].theta;
-    }
+    static_cast<Task*>(task)->processPointcloudData(data);
 }
 
-using namespace lidar_livox;
+void LidarInfoChangeCallback(const uint32_t handle,
+    const LivoxLidarInfo* info,
+    void* task)
+{
+    if (info == nullptr) {
+        printf("lidar info change callback failed, the info is nullptr.\n");
+        return;
+    }
+    printf("LidarInfoChangeCallback Lidar handle: %u SN: %s\n", handle, info->sn);
+    SetLivoxLidarWorkMode(handle, kLivoxLidarNormal, nullptr, nullptr);
+}
 
 Task::Task(std::string const& name)
     : TaskBase(name)
@@ -60,26 +50,26 @@ bool Task::configureHook()
     if (!TaskBase::configureHook())
         return false;
 
-    manageJsonFile();
-    std::string config = "config.json";
-    if (!LivoxLidarSdkInit(config.c_str())) {
+    std::string file_name = manageJsonFile();
+    if (!LivoxLidarSdkInit(file_name.c_str())) {
         LOG_ERROR_S << "Failed to connect to Lidar!" << std::endl;
         LivoxLidarSdkUninit();
         return false;
     }
-    SetLivoxLidarPointCloudCallBack(PointCloudCallback, nullptr);
+    m_measurements_to_merge = _number_of_measurements_per_pointcloud.get();
+    SetLivoxLidarInfoChangeCallback(LidarInfoChangeCallback, nullptr);
     return true;
 }
 bool Task::startHook()
 {
     if (!TaskBase::startHook())
         return false;
+    SetLivoxLidarPointCloudCallBack(PointCloudCallback, this);
     return true;
 }
 void Task::updateHook()
 {
     TaskBase::updateHook();
-    _output.write(1);
 }
 void Task::errorHook()
 {
@@ -97,40 +87,84 @@ void Task::cleanupHook()
     LivoxLidarSdkUninit();
 }
 
-void Task::manageJsonFile()
+std::string Task::manageJsonFile()
 {
     Json::Value data;
     Json::Value hap;
     Json::Value lidar_net_info;
     Json::Value host_net_info;
 
-    //TODO will be filled up with config
-    lidar_net_info["cmd_data_port"] = 56000;
-    lidar_net_info["push_msg_port"] = 0;
-    lidar_net_info["point_data_port"] = 57000;
-    lidar_net_info["imu_data_port"] = 58000;
-    lidar_net_info["log_data_port"] = 59000;
+    LidarNetInfo lidar_config = _config_lidar_net_info.get();
+    lidar_net_info["cmd_data_port"] = lidar_config.cmd_data_port;
+    lidar_net_info["push_msg_port"] = lidar_config.push_msg_port;
+    lidar_net_info["point_data_port"] = lidar_config.point_data_port;
+    lidar_net_info["imu_data_port"] = lidar_config.imu_data_port;
+    lidar_net_info["log_data_port"] = lidar_config.log_data_port;
 
-    host_net_info["cmd_data_ip"] = "192.168.1.50";
-    host_net_info["cmd_data_port"] = 56000;
-    host_net_info["push_msg_ip"] = "";
-    host_net_info["push_msg_port"] = 0;
-    host_net_info["point_data_ip"] = "192.168.1.50";
-    host_net_info["point_data_port"] = 57000;
-    host_net_info["imu_data_ip"] = "192.168.1.50";
-    host_net_info["imu_data_port"] = 58000;
-    host_net_info["log_data_ip"] = "";
-    host_net_info["log_data_port"] = 5900;
+    HostNetInfo host_config = _config_host_net_info.get();
+    host_net_info["cmd_data_ip"] = host_config.cmd_data_ip;
+    host_net_info["cmd_data_port"] = host_config.cmd_data_port;
+    host_net_info["push_msg_ip"] = host_config.push_msg_ip;
+    host_net_info["push_msg_port"] = host_config.push_msg_port;
+    host_net_info["point_data_ip"] = host_config.point_data_ip;
+    host_net_info["point_data_port"] = host_config.point_data_port;
+    host_net_info["imu_data_ip"] = host_config.imu_data_ip;
+    host_net_info["imu_data_port"] = host_config.imu_data_port;
+    host_net_info["log_data_ip"] = host_config.log_data_ip;
+    host_net_info["log_data_port"] = host_config.log_data_port;
 
     hap["lidar_net_info"] = lidar_net_info;
     hap["host_net_info"] = host_net_info;
     data["HAP"] = hap;
 
-    std::ofstream file_id;
-    file_id.open("config.json");
+    while (true) {
+        base::Time time;
+        time.now();
+        std::string file_name = "livox-" + getName() + "-" +
+                                time.toString(base::Time::Resolution::Milliseconds,
+                                    base::Time::DEFAULT_FORMAT) +
+                                ".json";
+        {
+            std::fstream file_id(file_name.c_str(), ios_base::in);
+            if (file_id) {
+                usleep(10000);
+                continue;
+            }
+        }
 
-    Json::StyledWriter styledWriter;
-    file_id << styledWriter.write(data);
+        std::fstream file_id(file_name.c_str(), ios_base::out);
+        Json::StyledWriter styledWriter;
+        file_id << styledWriter.write(data);
+        return file_name;
+    }
+    return "";
+}
 
-    file_id.close();
+void Task::processPointcloudData(LivoxLidarEthernetPacket const* data)
+{
+    if (data->data_type == kLivoxLidarCartesianCoordinateHighData) {
+        LivoxLidarCartesianHighRawPoint const* p_point_data =
+            reinterpret_cast<LivoxLidarCartesianHighRawPoint const*>(data->data);
+
+        if (m_point_cloud.time.isNull()) {
+            m_point_cloud.time = base::Time::now();
+        }
+
+        for (uint32_t i = 0; i < data->dot_num; i++) {
+            if (!p_point_data[i].x && !p_point_data[i].y && !p_point_data[i].z) {
+                continue;
+            }
+
+            m_point_cloud.points.push_back(
+                base::Point(p_point_data[i].x, p_point_data[i].y, p_point_data[i].z));
+        }
+
+        if (++m_measurements_merged == m_measurements_to_merge) {
+            _point_cloud.write(m_point_cloud);
+
+            m_point_cloud.time = base::Time();
+            m_point_cloud.points.clear();
+            m_measurements_merged = 0;
+        }
+    }
 }

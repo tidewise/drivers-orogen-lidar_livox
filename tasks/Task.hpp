@@ -6,6 +6,8 @@
 #include "lidar_livox/TaskBase.hpp"
 #include "livox_lidar_api.h"
 #include "livox_lidar_def.h"
+#include <base/samples/Pointcloud.hpp>
+#include <mutex>
 
 namespace lidar_livox {
 
@@ -33,7 +35,11 @@ argument.
     class Task : public TaskBase {
         friend class TaskBase;
 
-    protected:
+    private:
+        int m_measurements_to_merge = 0;
+        int m_measurements_merged = 0;
+        base::samples::Pointcloud m_point_cloud;
+
     public:
         /** TaskContext constructor for Task
          * \param name Name of the task. This name needs to be unique to make it
@@ -104,7 +110,8 @@ argument.
          */
         void cleanupHook();
 
-        void manageJsonFile();
+        std::string manageJsonFile();
+        void processPointcloudData(LivoxLidarEthernetPacket const* data);
     };
 }
 

@@ -10,6 +10,7 @@
   <depend package="drivers/lidar_livox_sdk" />
   <depend package="jsoncpp" />
   <depend package="base/logging" />
+  <depend package="base/types" />
 
   <test_depend name="tools/syskit" />
 </package>
