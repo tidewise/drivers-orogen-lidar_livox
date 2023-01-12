@@ -4,7 +4,7 @@ name "lidar_livox"
 
 # If new data types need to be defined, they have to be put in a separate C++
 # header, and this header will be loaded here
-import_types_from "lidar_livoxTypes.hpp"
+
 # Finally, it is pretty common that headers are directly loaded from an external
 # library. In this case, the library must be first used (the name is the
 # library's pkg-config name) and then the header can be used. Following Rock
@@ -12,6 +12,8 @@ import_types_from "lidar_livoxTypes.hpp"
 #
 # using_library "lidar_livox"
 using_library "lidar_livox_sdk"
+import_types_from "livox_lidar_def.h"
+import_types_from "lidar_livoxTypes.hpp"
 using_library "jsoncpp", typekit: false
 
 import_types_from "std"
@@ -23,8 +25,66 @@ task_context "Task" do
     property "config_lidar_net_info", "/lidar_livox/LidarNetInfo"
     property "config_host_net_info", "/lidar_livox/HostNetInfo"
     property "number_of_measurements_per_pointcloud", "int"
-    output_port "point_cloud", "/base/samples/Pointcloud"
 
-    periodic 0.1
+    # Pointcloud data type
+    # This value is not allowed to be set during sampling,
+    # and default CartesianCoordinateHighData is restored after rebooting.
+    property "conf_point_data_type", "/lidar_livox/PointDataType"
+
+    # Pattern mode:
+    # NoneRepetive: Non-repetitive scan
+    # Repetive: Repetitive scan
+    # LowFrameRate: Repetitive with low frame rate
+    # Note: After setting, the LiDAR needs to reboot, the default value is NoneRepetive
+    property "conf_scan_pattern", "/lidar_livox/ScanPattern"
+
+    property "conf_dual_emit", "bool"
+
+    # Enable/Disable point cloud
+    # Note: The function takes effect in real time,
+    # and the default value 0x00 will be restored after rebooting
+    property "conf_send_point_cloud", "bool"
+
+    # Installation location of LiDAR on the user's system.
+    # This information is not processed internally by LiDAR.
+    property "conf_install_attitude", "/lidar_livox/LidarInstallAttitude"
+
+    # property "conf_fov_cfg0", "/lidar_livox/LidarFovCfg"
+    # property "conf_fov_cfg1", "/lidar_livox/LidarFovCfg"
+
+
+    property "conf_lidar_detect_mode", "/lidar_livox/LidarDetectMode"
+    # property "conf_function_io", "/lidar_livox/LidarFuncIOCfg"
+
+    # Blind spot set(cm)
+    # Note:
+    # 1. The range is 50-200cm, default is 50cm.
+    # 2. Save in ROM, take effect in real time.
+    # 3. It is not recommended to set this value in SAMPLING state.
+    property "conf_blind_spot", "uint32_t", 50
+
+    # Glass heating enable option
+    # Note:
+    # 1. The heating can only be turned on for a maximum of 3 minutes at a power cycle time,
+    # otherwise the window heating mode will be automatically exited,
+    # and the heating request will not be responded.
+    # 2. Heating will not be performed in ERROR state.
+    property "conf_enable_glass_heat", "bool", false
+
+
+    property "conf_glass_heat", "/lidar_livox/LidarGlassHeat"
+
+    # IMU data push enable option
+    # Note:
+    # For HAP Tx version, the default value is true.
+    property "conf_enable_imu", "bool", true
+
+    # Fusa diagnostic function
+    # Default: disabled
+    property "conf_enable_fusa_function", "bool", false
+
+
+
+    output_port "point_cloud", "/base/samples/Pointcloud"
 end
 

@@ -9,7 +9,7 @@
 using namespace std;
 using namespace lidar_livox;
 
-void PointCloudCallback(uint32_t handle,
+void pointCloudCallback(uint32_t handle,
     const uint8_t dev_type,
     LivoxLidarEthernetPacket* data,
     void* task)
@@ -20,16 +20,38 @@ void PointCloudCallback(uint32_t handle,
     static_cast<Task*>(task)->processPointcloudData(data);
 }
 
-void LidarInfoChangeCallback(const uint32_t handle,
-    const LivoxLidarInfo* info,
-    void* task)
+void configurationSetCallback(livox_status status,
+    uint32_t handle,
+    LivoxLidarAsyncControlResponse* response,
+    void* data)
 {
-    if (info == nullptr) {
-        printf("lidar info change callback failed, the info is nullptr.\n");
+    auto& task(*static_cast<Task*>(data));
+    if (response == nullptr) {
         return;
     }
-    printf("LidarInfoChangeCallback Lidar handle: %u SN: %s\n", handle, info->sn);
-    SetLivoxLidarWorkMode(handle, kLivoxLidarNormal, nullptr, nullptr);
+    LOG_INFO_S << "configurationSetCallback, status: " << status << ", handle: " << handle
+               << ", ret_code:" << unsigned(response->ret_code)
+               << ", error_key: " << unsigned(response->error_key) << endl;
+
+    response->ret_code == 0 ? task.notifyCommandSuccess()
+                            : task.notifyCommandFailure(response->ret_code);
+}
+
+void lidarInfoChangeCallback(const uint32_t handle,
+    const LivoxLidarInfo* info,
+    void* data)
+{
+    auto& task(*static_cast<Task*>(data));
+    if (info == nullptr) {
+        LOG_ERROR_S << "lidar info change callback failed, the info is nullptr." << endl;
+        task.notifyCommandFailure(1);
+        return;
+    }
+    LOG_INFO_S << "LidarInfoChangeCallback Lidar handle:" << handle << " SN: " << info->sn
+               << endl;
+
+    task.handle = handle;
+    task.notifyCommandSuccess();
 }
 
 Task::Task(std::string const& name)
@@ -39,11 +61,9 @@ Task::Task(std::string const& name)
 
 Task::~Task()
 {
+    SetLivoxLidarWorkMode(handle, kLivoxLidarWakeUp, nullptr, nullptr);
+    LivoxLidarSdkUninit();
 }
-
-/// The following lines are template definitions for the various state machine
-// hooks defined by Orocos::RTT. See Task.hpp for more detailed
-// documentation about them.
 
 bool Task::configureHook()
 {
@@ -57,34 +77,43 @@ bool Task::configureHook()
         return false;
     }
     m_measurements_to_merge = _number_of_measurements_per_pointcloud.get();
-    SetLivoxLidarInfoChangeCallback(LidarInfoChangeCallback, nullptr);
+    SetLivoxLidarInfoChangeCallback(lidarInfoChangeCallback, this);
+    waitForCommandSuccess();
+    if (!configureLidar()) {
+        LOG_ERROR_S << "Failed to configure the lidar!" << std::endl;
+        return false;
+    }
     return true;
 }
+
 bool Task::startHook()
 {
     if (!TaskBase::startHook())
         return false;
-    SetLivoxLidarPointCloudCallBack(PointCloudCallback, this);
+    SetLivoxLidarPointCloudCallBack(pointCloudCallback, this);
     return true;
 }
+
 void Task::updateHook()
 {
     TaskBase::updateHook();
 }
+
 void Task::errorHook()
 {
     TaskBase::errorHook();
-    LivoxLidarSdkUninit();
+    SetLivoxLidarWorkMode(handle, kLivoxLidarWakeUp, configurationSetCallback, nullptr);
 }
+
 void Task::stopHook()
 {
     TaskBase::stopHook();
-    LivoxLidarSdkUninit();
+    SetLivoxLidarWorkMode(handle, kLivoxLidarWakeUp, configurationSetCallback, nullptr);
 }
+
 void Task::cleanupHook()
 {
     TaskBase::cleanupHook();
-    LivoxLidarSdkUninit();
 }
 
 std::string Task::manageJsonFile()
@@ -156,7 +185,7 @@ void Task::processPointcloudData(LivoxLidarEthernetPacket const* data)
             }
 
             m_point_cloud.points.push_back(
-                base::Point(p_point_data[i].x, p_point_data[i].y, p_point_data[i].z));
+                base::Point(p_point_data[i].x/1000.0, p_point_data[i].y/1000.0, p_point_data[i].z/1000.0));
         }
 
         if (++m_measurements_merged == m_measurements_to_merge) {
@@ -167,4 +196,238 @@ void Task::processPointcloudData(LivoxLidarEthernetPacket const* data)
             m_measurements_merged = 0;
         }
     }
+
+    // TODO CARTESIANCOORDINATELOWDATA
+    // TODO SPHERICALCOORDINATEDATA
 }
+
+void Task::notifyCommandSuccess()
+{
+    unique_lock<std::mutex> lock(m_command_sync_mutex);
+    m_error_code = 0;
+    m_command_sync_condition.notify_all();
+}
+
+void Task::notifyCommandFailure(int error_code)
+{
+    unique_lock<std::mutex> lock(m_command_sync_mutex);
+    m_error_code = error_code;
+    m_command_sync_condition.notify_all();
+}
+
+void Task::waitForCommandSuccess()
+{
+    unique_lock<std::mutex> lock(m_command_sync_mutex);
+
+    m_command_sync_condition.wait(lock);
+    if (m_error_code) {
+        throw std::runtime_error(m_lidar_status[m_error_code]);
+    }
+}
+
+bool Task::configureLidar()
+{
+    SetLivoxLidarPclDataType(handle,
+        static_cast<LivoxLidarPointDataType>(_conf_point_data_type.get()),
+        configurationSetCallback,
+        this);
+    waitForCommandSuccess();
+
+    SetLivoxLidarScanPattern(handle,
+        static_cast<LivoxLidarScanPattern>(_conf_scan_pattern.get()),
+        configurationSetCallback,
+        this);
+    waitForCommandSuccess();
+
+    SetLivoxLidarDualEmit(handle, _conf_dual_emit.get(), configurationSetCallback, this);
+    waitForCommandSuccess();
+
+    if (_conf_send_point_cloud.get()) {
+        EnableLivoxLidarPointSend(handle, configurationSetCallback, this);
+    }
+    else {
+        DisableLivoxLidarPointSend(handle, configurationSetCallback, this);
+    }
+    waitForCommandSuccess();
+
+    LidarInstallAttitude attitude = _conf_install_attitude.get();
+    LivoxLidarInstallAttitude livox_attitude;
+    memcpy(&livox_attitude,&attitude,sizeof(attitude));
+    SetLivoxLidarInstallAttitude(handle,
+        &livox_attitude,
+        configurationSetCallback,
+        this);
+
+    // Still need to check
+    {
+        /**
+         * Set LiDAR Ip info.
+         * @param  handle        device handle.
+         * @param  ipconfig      lidar ip info.
+         * @param  cb            callback for the command.
+         * @param  client_data   user data associated with the command.
+         * @return kStatusSuccess on successful return, see \ref LivoxStatus for other
+         * error code.
+         */
+        livox_status SetLivoxLidarIp(uint32_t handle,
+            LivoxLidarIpInfo * ip_config,
+            LivoxLidarAsyncControlCallback cb,
+            void* client_data);
+
+        /**
+         * Set LiDAR state Ip info.
+         * @param  handle                 device handle.
+         * @param  host_state_info_ipcfg  lidar ip info.
+         * @param  cb                     callback for the command.
+         * @param  client_data            user data associated with the command.
+         * @return kStatusSuccess on successful return, see \ref LivoxStatus for other
+         * error code.
+         */
+        livox_status SetLivoxLidarStateInfoHostIPCfg(uint32_t handle,
+            HostStateInfoIpInfo * host_state_info_ipcfg,
+            LivoxLidarAsyncControlCallback cb,
+            void* client_data);
+
+        /**
+         * Set LiDAR point cloud host ip info.
+         * @param  handle                 device handle.
+         * @param  host_point_ipcfg       lidar ip info.
+         * @param  cb                     callback for the command.
+         * @param  client_data            user data associated with the command.
+         * @return kStatusSuccess on successful return, see \ref LivoxStatus for other
+         * error code.
+         */
+        livox_status SetLivoxLidarPointDataHostIPCfg(uint32_t handle,
+            HostPointIPInfo * host_point_ipcfg,
+            LivoxLidarAsyncControlCallback cb,
+            void* client_data);
+
+        /**
+         * Set LiDAR imu data host ip info.
+         * @param  handle                 device handle.
+         * @param  host_imu_ipcfg         lidar ip info.
+         * @param  cb                     callback for the command.
+         * @param  client_data            user data associated with the command.
+         * @return kStatusSuccess on successful return, see \ref LivoxStatus for other
+         * error code.
+         */
+        livox_status SetLivoxLidarImuDataHostIPCfg(uint32_t handle,
+            HostImuDataIPInfo * host_imu_ipcfg,
+            LivoxLidarAsyncControlCallback cb,
+            void* client_data);
+    }
+    // end
+    // auto coiso2 = static_cast<FovCfg>(_conf_fov_cfg0.get());
+    // SetLivoxLidarFovCfg0(handle, coiso2, configurationSetCallback, this);
+    // waitForCommandSuccess();
+    // auto coiso1 = static_cast<FovCfg>(_conf_fov_cfg1.get());
+    // SetLivoxLidarFovCfg1(handle, coiso1, configurationSetCallback, this);
+    // waitForCommandSuccess();
+
+    // /**
+    //  * Enable LiDAR fov cfg1.
+    //  * @param  handle          device handle.
+    //  * @param  cb              callback for the command.
+    //  * @param  client_data     user data associated with the command.
+    //  * @return kStatusSuccess on successful return, see \ref LivoxStatus for other
+    //  error
+    //  * code.
+    //  */
+    // EnableLivoxLidarFov(handle, uint8_t fov_en, configurationSetCallback, this);
+    // waitForCommandSuccess();
+
+    // /**
+    //  * Disable LiDAR fov.
+    //  * @param  handle          device handle.
+    //  * @param  cb              callback for the command.
+    //  * @param  client_data     user data associated with the command.
+    //  * @return kStatusSuccess on successful return, see \ref LivoxStatus for other
+    //  error
+    //  * code.
+    //  */
+    // DisableLivoxLidarFov(handle, configurationSetCallback, this);
+    // waitForCommandSuccess();
+
+    SetLivoxLidarDetectMode(handle,
+        static_cast<LivoxLidarDetectMode>(_conf_lidar_detect_mode.get()),
+        configurationSetCallback,
+        this);
+    waitForCommandSuccess();
+
+    // /**
+    //  * Set LiDAR func io cfg.
+    //  * @param  handle          device handle.
+    //  * @param  func_io_cfg     func io cfg; 0:IN0,1:IN1, 2:OUT0, 3:OUT1;Mid360 lidar 8,
+    //  * 10, 12, 11
+    //  * @param  cb              callback for the command.
+    //  * @param  client_data     user data associated with the command.
+    //  * @return kStatusSuccess on successful return, see \ref LivoxStatus for other
+    //  error
+    //  * code.
+    //  */
+    // auto coiso = static_cast<FuncIOCfg>(_conf_function_io.get());
+    // SetLivoxLidarFuncIOCfg(handle, coiso, configurationSetCallback, this);
+    // waitForCommandSuccess();
+
+    SetLivoxLidarBlindSpot(handle,
+        _conf_blind_spot.get(),
+        configurationSetCallback,
+        this);
+    waitForCommandSuccess();
+
+    if (_conf_enable_glass_heat.get()) {
+
+        EnableLivoxLidarGlassHeat(handle, configurationSetCallback, this);
+    }
+    else {
+        DisableLivoxLidarGlassHeat(handle, configurationSetCallback, this);
+    }
+    waitForCommandSuccess();
+
+    SetLivoxLidarGlassHeat(handle,
+        static_cast<LivoxLidarGlassHeat>(_conf_glass_heat.get()),
+        configurationSetCallback,
+        this);
+    waitForCommandSuccess();
+
+    if (_conf_enable_imu.get()) {
+
+        EnableLivoxLidarImuData(handle, configurationSetCallback, this);
+    }
+    else {
+        DisableLivoxLidarImuData(handle, configurationSetCallback, this);
+    }
+    waitForCommandSuccess();
+
+    // mid360 lidar does not support
+    if (_conf_enable_fusa_function.get()) {
+
+        EnableLivoxLidarFusaFunciont(handle, configurationSetCallback, this);
+    }
+    else {
+        DisableLivoxLidarFusaFunciont(handle, configurationSetCallback, this);
+    }
+    waitForCommandSuccess();
+
+    SetLivoxLidarWorkMode(handle, kLivoxLidarNormal, configurationSetCallback, this);
+    waitForCommandSuccess();
+    return true;
+}
+
+// void GEEEET()
+// {
+//     /**
+//      * Get LiDAR extrinsic parameters.
+//      * @param  handle           device handle.
+//      * @param  install_attitude extrinsic parameters.
+//      * @param  cb               callback for the command.
+//      * @param  client_data      user data associated with the command.
+//      * @return kStatusSuccess on successful return, see \ref LivoxStatus for other
+//      error
+//      * code.
+//      */
+//     SetLivoxLidarInstallAttitude(handle,
+//         LivoxLidarInstallAttitude * install_attitude,
+//         configurationSetCallback,
+//         this);
+// }

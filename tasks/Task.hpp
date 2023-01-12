@@ -7,6 +7,7 @@
 #include "livox_lidar_api.h"
 #include "livox_lidar_def.h"
 #include <base/samples/Pointcloud.hpp>
+#include <condition_variable>
 #include <mutex>
 
 namespace lidar_livox {
@@ -36,15 +37,32 @@ argument.
         friend class TaskBase;
 
     private:
+        std::mutex m_command_sync_mutex;
+        std::condition_variable m_command_sync_condition;
+        int m_error_code = 0;
+
         int m_measurements_to_merge = 0;
         int m_measurements_merged = 0;
         base::samples::Pointcloud m_point_cloud;
 
+        const std::array<std::string, 10> m_lidar_status = {
+            "Success.",
+            "Failure.",
+            "Requested device is not connected.",
+            "Operation is not supported on this device.",
+            "Operation timeouts.",
+            "No enough memory.",
+            "Command channel not exist.",
+            "Device handle invalid.",
+            "Handler implementation not exist.",
+            "Command send failed.",
+        };
+
     public:
         /** TaskContext constructor for Task
          * \param name Name of the task. This name needs to be unique to make it
-         * identifiable via nameservices. \param initial_state The initial TaskState of
-         * the TaskContext. Default is Stopped state.
+         * identifiable via nameservices. \param initial_state The initial TaskState
+         * of the TaskContext. Default is Stopped state.
          */
         Task(std::string const& name = "lidar_livox::Task");
 
@@ -112,6 +130,13 @@ argument.
 
         std::string manageJsonFile();
         void processPointcloudData(LivoxLidarEthernetPacket const* data);
+        LivoxLidarWorkMode state = kLivoxLidarWakeUp;
+        uint32_t handle;
+        bool configureLidar();
+
+        void notifyCommandSuccess();
+        void notifyCommandFailure(int error_code);
+        void waitForCommandSuccess();
     };
 }
 
