@@ -57,6 +57,7 @@ argument.
             "Handler implementation not exist.",
             "Command send failed.",
         };
+        LidarStateInfo m_lidar_state_info;
 
     public:
         /** TaskContext constructor for Task
@@ -137,6 +138,7 @@ argument.
         void notifyCommandSuccess();
         void notifyCommandFailure(int error_code);
         void waitForCommandSuccess();
+        void proccessInfoData(LivoxLidarDiagInternalInfoResponse* response);
     };
 }
 

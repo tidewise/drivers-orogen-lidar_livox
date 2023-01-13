@@ -49,8 +49,8 @@ namespace lidar_livox {
     };
 
     enum LidarDetectMode {
-        Normal = kLivoxLidarDetectNormal,
-        Sensitive = kLivoxLidarDetectSensitive
+        DetectNormal = kLivoxLidarDetectNormal,
+        DetectSensitive = kLivoxLidarDetectSensitive
     };
 
     struct LidarInstallAttitude {
@@ -71,18 +71,73 @@ namespace lidar_livox {
     };
 
     struct LidarFovCfg {
-        int32_t yaw_start;
-        int32_t yaw_stop;
-        int32_t pitch_start;
-        int32_t pitch_stop;
-        uint32_t rsvd;
+        int32_t yaw_start = 0;
+        int32_t yaw_stop = 0;
+        int32_t pitch_start = 0;
+        int32_t pitch_stop = 0;
+        uint32_t rsvd = 0;
     };
 
     struct LidarFuncIOCfg {
-        uint8_t in0;
-        uint8_t int1;
-        uint8_t out0;
-        uint8_t out1;
+        uint8_t in0 = 0;
+        uint8_t int1 = 0;
+        uint8_t out0 = 0;
+        uint8_t out1 = 0;
+    };
+
+    enum LidarWorkMode {
+        WorkModeNormal = kLivoxLidarNormal,
+        WorkModeWakeUp = kLivoxLidarWakeUp,
+        WorkModeSleep = kLivoxLidarSleep,
+        WorkModeError = kLivoxLidarError,
+        WorkModePowerOnSelfTest = kLivoxLidarPowerOnSelfTest,
+        WorkModeMotorStarting = kLivoxLidarMotorStarting,
+        WorkModeMotorStoping = kLivoxLidarMotorStoping,
+        WorkModeUpgrade = kLivoxLidarUpgrade
+    };
+
+    struct LidarStateInfo {
+        PointDataType pcl_data_type = PointDataType::ImuData;
+        ScanPattern pattern_mode = ScanPattern::NoneRepetive;
+        bool dual_emit_en = false;
+        bool point_send_en = false;
+        // LivoxLidarIpInfo livox_lidar_ip_info;
+        // HostStateInfoIpInfo host_state_info;
+        // HostPointIPInfo host_point_ip_info;
+        // HostImuDataIPInfo host_imu_data_ip_info;
+        // LivoxLidarInstallAttitude install_attitude;
+        uint32_t blind_spot_set = 50;
+        LidarGlassHeat glass_heat = LidarGlassHeat::StopPowerOnHeatingOrDiagnosticHeating;
+        bool fusa_en = false;
+        LidarFovCfg fov_cfg0;
+        LidarFuncIOCfg fov_cfg1;
+
+        bool fov_en = false;
+        LidarDetectMode detect_mode = LidarDetectMode::DetectNormal;
+        uint8_t func_io_cfg[4]{0, 0, 0, 0};
+        LidarWorkMode work_mode;
+        bool imu_data_en = false;
+        uint64_t status_code = 0;
+        char sn[16] = {};
+        char product_info[64] = {};
+        uint8_t version_app[4] = {};
+        uint8_t version_load[4] = {};
+        uint8_t version_hardware[4] = {};
+        uint8_t mac[6] = {};
+
+        LidarWorkMode cur_work_state= LidarWorkMode::WorkModeNormal;
+        int32_t core_temp= 0;
+        uint32_t power_up_cnt= 0;
+
+        uint64_t local_time_now= 0;
+        uint64_t last_sync_time= 0;
+        int64_t time_offset= 0;
+
+        uint8_t time_sync_type= 0;
+
+        uint16_t diag_status= 0;
+        uint8_t fw_type= 0;
+        uint32_t hms_code[8]= {};
     };
 }
 #endif
