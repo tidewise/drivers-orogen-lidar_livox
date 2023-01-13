@@ -52,16 +52,15 @@ task_context "Task" do
     # property "conf_fov_cfg0", "/lidar_livox/LidarFovCfg"
     # property "conf_fov_cfg1", "/lidar_livox/LidarFovCfg"
 
-
     property "conf_lidar_detect_mode", "/lidar_livox/LidarDetectMode"
     # property "conf_function_io", "/lidar_livox/LidarFuncIOCfg"
 
-    # Blind spot set(cm)
+    # Blind spot set(m)
     # Note:
-    # 1. The range is 50-200cm, default is 50cm.
+    # 1. The range is 0.50-2.0m, default is 0.50m.
     # 2. Save in ROM, take effect in real time.
     # 3. It is not recommended to set this value in SAMPLING state.
-    property "conf_blind_spot", "uint32_t", 50
+    property "conf_blind_spot", "float", 0.50
 
     # Glass heating enable option
     # Note:
@@ -72,7 +71,7 @@ task_context "Task" do
     property "conf_enable_glass_heat", "bool", false
 
 
-    property "conf_glass_heat", "/lidar_livox/LidarGlassHeat"
+    # property "conf_glass_heat", "/lidar_livox/LidarGlassHeat"
 
     # IMU data push enable option
     # Note:
