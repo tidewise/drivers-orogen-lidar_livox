@@ -243,7 +243,12 @@ void Task::waitForCommandSuccess()
 
     m_command_sync_condition.wait(lock);
     if (m_error_code) {
-        throw std::runtime_error(m_lidar_status[m_error_code]);
+        try {
+            throw std::runtime_error(m_lidar_status.at(m_error_code));
+        }
+        catch (const std::out_of_range& e) {
+            throw std::runtime_error("Unkown error!");
+        }
     }
 }
 
@@ -435,24 +440,6 @@ bool Task::configureLidar()
     return true;
 }
 
-// void GEEEET()
-// {
-//     /**
-//      * Get LiDAR extrinsic parameters.
-//      * @param  handle           device handle.
-//      * @param  install_attitude extrinsic parameters.
-//      * @param  cb               callback for the command.
-//      * @param  client_data      user data associated with the command.
-//      * @return kStatusSuccess on successful return, see \ref LivoxStatus for other
-//      error
-//      * code.
-//      */
-//     SetLivoxLidarInstallAttitude(handle,
-//         LivoxLidarInstallAttitude * install_attitude,
-//         configurationSetCallback,
-//         this);
-// }
-
 void Task::proccessInfoData(LivoxLidarDiagInternalInfoResponse* response)
 {
     uint16_t off = 0;
@@ -588,13 +575,13 @@ void Task::proccessInfoData(LivoxLidarDiagInternalInfoResponse* response)
                 // case (kKeyLidarFlashStatus:
                 //     FovCfg lidar_data_fov_cfg1 =
                 // static_cast<FovCfg>(kv->value[0]);
-            //     break;
-            // case kKeyHmsCode:
-            //     memcpy(&m_lidar_state_info.hms_code, &(kv->value[0]), kv->length);
-            //     break;
-            // case kKeyFwType:
-            //     memcpy(&m_lidar_state_info.fw_type, &(kv->value[0]), kv->length);
-            //     break;
+                //     break;
+                // case kKeyHmsCode:
+                //     memcpy(&m_lidar_state_info.hms_code, &(kv->value[0]), kv->length);
+                //     break;
+                // case kKeyFwType:
+                //     memcpy(&m_lidar_state_info.fw_type, &(kv->value[0]), kv->length);
+                //     break;
 
                 // case (kKeyLidarDiagInfoQue:
                 //     break;
