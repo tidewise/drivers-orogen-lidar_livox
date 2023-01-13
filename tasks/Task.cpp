@@ -116,6 +116,9 @@ bool Task::startHook()
 void Task::updateHook()
 {
     TaskBase::updateHook();
+    QueryLivoxLidarInternalInfo(handle, queryInternalInfoCallback, this);
+    waitForCommandSuccess();
+    _lidar_status.write(m_lidar_state_info);
 }
 
 void Task::errorHook()
@@ -212,7 +215,6 @@ void Task::processPointcloudData(LivoxLidarEthernetPacket const* data)
 
         if (++m_measurements_merged == m_measurements_to_merge) {
             _point_cloud.write(m_point_cloud);
-            _lidar_status.write(m_lidar_state_info);
             m_point_cloud.time = base::Time();
             m_point_cloud.points.clear();
             m_measurements_merged = 0;
@@ -459,40 +461,63 @@ void Task::proccessInfoData(LivoxLidarDiagInternalInfoResponse* response)
             case kKeyPointSendEnable:
                 m_lidar_state_info.point_send_en = static_cast<bool>(kv->value[0]);
                 break;
-                // case kKeyLidarIPCfg:
-                //     HostStateInfoIpInfo lidar_data_ip_info =
-                //         static_cast<HostStateInfoIpInfo>(kv->value[0]);
-                //     break;
-                // case (kKeyStateInfoHostIPCfg:
-                //     HostPointIPInfo lidar_data_host_info =
-                //         static_cast<HostPointIPInfo>(kv->value[0]);
-                //     break;
-                // case (kKeyLidarPointDataHostIPCfg:
-                //     memcpy(m_lidar_state_info.host_point_ip_info.host_ip_addr,
-                //         &(kv->value[0]),
-                //         sizeof(uint8_t) * 4);
-                //
-                // memcpy(&(m_lidar_state_info.host_point_ip_info.host_point_data_port),
-                // //         &(kv->value[4]),
-                // //         sizeof(uint16_t));
-                // //
-                // memcpy(&(m_lidar_state_info.host_point_ip_info.lidar_point_data_port),
-                // //         &(kv->value[6]),
-                // //         sizeof(uint16_t));
-                // //     break;
-                // // case (kKeyLidarImuHostIPCfg:
-                // // memcpy(m_lidar_state_info.host_imu_data_ip_info.host_ip_addr,
-                // //     &(kv->value[0]), sizeof(uint8_t) * 4);
-                // //
-                // memcpy(&(m_lidar_state_info.host_imu_data_ip_info.host_imu_data_port),
-                // //     &(kv->value[4]), sizeof(uint16_t));
-                // //
-                // memcpy(&(m_lidar_state_info.host_imu_data_ip_info.lidar_imu_data_port),
-                // //     &(kv->value[6]), sizeof(uint16_t)); break;
-                // // case (kKeyInstallAttitude:
-                // //     memcpy(&m_lidar_state_info.install_attitude,
-                // &(kv->value[0]),
-                // //     kv->length); break;
+            case kKeyLidarIPCfg: {
+                std::string ip_text =
+                    to_string(kv->value[0]) + "." + to_string(kv->value[1]) + "." +
+                    to_string(kv->value[2]) + "." + to_string(kv->value[3]);
+                strcpy(m_lidar_state_info.livox_lidar_ip_info.ip_addr, ip_text.c_str());
+                ip_text = to_string(kv->value[4]) + "." + to_string(kv->value[5]) + "." +
+                          to_string(kv->value[6]) + "." + to_string(kv->value[7]);
+                strcpy(m_lidar_state_info.livox_lidar_ip_info.net_mask, ip_text.c_str());
+                ip_text = to_string(kv->value[8]) + "." + to_string(kv->value[9]) + "." +
+                          to_string(kv->value[10]) + "." + to_string(kv->value[11]);
+                strcpy(m_lidar_state_info.livox_lidar_ip_info.gw_addr, ip_text.c_str());
+                break;
+            }
+            case kKeyStateInfoHostIPCfg: {
+                std::string ip_text =
+                    to_string(kv->value[0]) + "." + to_string(kv->value[1]) + "." +
+                    to_string(kv->value[2]) + "." + to_string(kv->value[3]);
+                strcpy(m_lidar_state_info.host_state_info.host_ip_addr, ip_text.c_str());
+                memcpy(&(m_lidar_state_info.host_state_info.host_state_info_port),
+                    &(kv->value[4]),
+                    sizeof(uint16_t));
+                memcpy(&(m_lidar_state_info.host_state_info.lidar_state_info_port),
+                    &(kv->value[6]),
+                    sizeof(uint16_t));
+                break;
+            }
+            case kKeyLidarPointDataHostIPCfg: {
+                std::string ip_text =
+                    to_string(kv->value[0]) + "." + to_string(kv->value[1]) + "." +
+                    to_string(kv->value[2]) + "." + to_string(kv->value[3]);
+                strcpy(m_lidar_state_info.host_point_ip_info.host_ip_addr,
+                    ip_text.c_str());
+                memcpy(&(m_lidar_state_info.host_point_ip_info.host_point_data_port),
+                    &(kv->value[4]),
+                    sizeof(uint16_t));
+                memcpy(&(m_lidar_state_info.host_point_ip_info.lidar_point_data_port),
+                    &(kv->value[6]),
+                    sizeof(uint16_t));
+                break;
+            }
+            case kKeyLidarImuHostIPCfg: {
+                std::string ip_text =
+                    to_string(kv->value[0]) + "." + to_string(kv->value[1]) + "." +
+                    to_string(kv->value[2]) + "." + to_string(kv->value[3]);
+                strcpy(m_lidar_state_info.host_imu_data_ip_info.host_ip_addr,
+                    ip_text.c_str());
+                memcpy(&(m_lidar_state_info.host_imu_data_ip_info.host_imu_data_port),
+                    &(kv->value[4]),
+                    sizeof(uint16_t));
+                memcpy(&(m_lidar_state_info.host_imu_data_ip_info.lidar_imu_data_port),
+                    &(kv->value[6]),
+                    sizeof(uint16_t));
+                break;
+            }
+            case kKeyInstallAttitude:
+                memcpy(&m_lidar_state_info.install_attitude, &(kv->value[0]), kv->length);
+                break;
             case kKeyBlindSpotSet:
                 m_lidar_state_info.blind_spot_set = static_cast<uint32_t>(kv->value[0]);
                 break;
@@ -502,10 +527,9 @@ void Task::proccessInfoData(LivoxLidarDiagInternalInfoResponse* response)
             case kKeyFovCfg1:
                 memcpy(&m_lidar_state_info.fov_cfg1, &(kv->value[0]), kv->length);
                 break;
-                // case (kKeyRoiEn:
-                //     FovCfg lidar_data_fov_cfg1 =
-                // static_cast<FovCfg>(kv->value[0]);
-            //     break;
+            case kKeyRoiEn:
+                // TODO
+                break;
             case kKeyDetectMode:
                 m_lidar_state_info.detect_mode =
                     static_cast<LidarDetectMode>(kv->value[0]);
@@ -525,8 +549,9 @@ void Task::proccessInfoData(LivoxLidarDiagInternalInfoResponse* response)
             case kKeyFusaEn:
                 m_lidar_state_info.fusa_en = static_cast<bool>(kv->value[0]);
                 break;
-            // case (kKeyLogParamSet:
-            //     ? ? ? ? ? ? / break;
+            case kKeyLogParamSet:
+                //  TODO
+                break;
             case kKeySn:
                 memcpy(&m_lidar_state_info.sn, &(kv->value[0]), kv->length);
                 break;
@@ -566,25 +591,12 @@ void Task::proccessInfoData(LivoxLidarDiagInternalInfoResponse* response)
             case kKeyTimeSyncType:
                 memcpy(&m_lidar_state_info.time_sync_type, &(kv->value[0]), kv->length);
                 break;
-            // case (kKeyStatusCode:
-            //     ?????
-            //     break;
+            case kKeyStatusCode:
+                m_lidar_state_info.status_code = static_cast<uint64_t>(kv->length);
+                break;
             case kKeyLidarDiagStatus:
                 memcpy(&m_lidar_state_info.diag_status, &(kv->value[0]), kv->length);
                 break;
-                // case (kKeyLidarFlashStatus:
-                //     FovCfg lidar_data_fov_cfg1 =
-                // static_cast<FovCfg>(kv->value[0]);
-                //     break;
-                // case kKeyHmsCode:
-                //     memcpy(&m_lidar_state_info.hms_code, &(kv->value[0]), kv->length);
-                //     break;
-                // case kKeyFwType:
-                //     memcpy(&m_lidar_state_info.fw_type, &(kv->value[0]), kv->length);
-                //     break;
-
-                // case (kKeyLidarDiagInfoQue:
-                //     break;
         }
         off += sizeof(uint16_t) * 2;
         off += kv->length;

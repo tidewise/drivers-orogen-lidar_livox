@@ -96,16 +96,46 @@ namespace lidar_livox {
         WorkModeUpgrade = kLivoxLidarUpgrade
     };
 
+    struct LivoxLidarLoggerCfgInfo {
+        bool lidar_log_enable;
+        uint32_t lidar_log_cache_size;
+        char lidar_log_path[1024];
+    };
+
+    struct LidarIpInfo {
+        char ip_addr[16];  /**< IP address. */
+        char net_mask[16]; /**< Subnet mask. */
+        char gw_addr[16];  /**< Gateway address. */
+    };
+
+    struct HostStateInfoIpInfo {
+        char host_ip_addr[16]; /**< IP address. */
+        uint16_t host_state_info_port;
+        uint16_t lidar_state_info_port;
+    };
+
+    struct HostPointIPInfo {
+        char host_ip_addr[16]; /**< IP address. */
+        uint16_t host_point_data_port;
+        uint16_t lidar_point_data_port;
+    };
+
+    struct HostImuDataIPInfo {
+        char host_ip_addr[16];        /**< IP address. */
+        uint16_t host_imu_data_port;  // resv
+        uint16_t lidar_imu_data_port; // resv
+    };
+
     struct LidarStateInfo {
         PointDataType pcl_data_type = PointDataType::ImuData;
         ScanPattern pattern_mode = ScanPattern::NoneRepetive;
         bool dual_emit_en = false;
         bool point_send_en = false;
-        // LivoxLidarIpInfo livox_lidar_ip_info;
-        // HostStateInfoIpInfo host_state_info;
-        // HostPointIPInfo host_point_ip_info;
-        // HostImuDataIPInfo host_imu_data_ip_info;
-        // LivoxLidarInstallAttitude install_attitude;
+        lidar_livox::LidarIpInfo livox_lidar_ip_info;
+        lidar_livox::HostStateInfoIpInfo host_state_info;
+        lidar_livox::HostPointIPInfo host_point_ip_info;
+        lidar_livox::HostImuDataIPInfo host_imu_data_ip_info;
+        lidar_livox::LidarInstallAttitude install_attitude;
         uint32_t blind_spot_set = 50;
         LidarGlassHeat glass_heat = LidarGlassHeat::StopPowerOnHeatingOrDiagnosticHeating;
         bool fusa_en = false;
@@ -125,19 +155,19 @@ namespace lidar_livox {
         uint8_t version_hardware[4] = {};
         uint8_t mac[6] = {};
 
-        LidarWorkMode cur_work_state= LidarWorkMode::WorkModeNormal;
-        int32_t core_temp= 0;
-        uint32_t power_up_cnt= 0;
+        LidarWorkMode cur_work_state = LidarWorkMode::WorkModeNormal;
+        int32_t core_temp = 0;
+        uint32_t power_up_cnt = 0;
 
-        uint64_t local_time_now= 0;
-        uint64_t last_sync_time= 0;
-        int64_t time_offset= 0;
+        uint64_t local_time_now = 0;
+        uint64_t last_sync_time = 0;
+        int64_t time_offset = 0;
 
-        uint8_t time_sync_type= 0;
+        uint8_t time_sync_type = 0;
 
-        uint16_t diag_status= 0;
-        uint8_t fw_type= 0;
-        uint32_t hms_code[8]= {};
+        uint16_t diag_status = 0;
+        uint8_t fw_type = 0;
+        uint32_t hms_code[8] = {};
     };
 }
 #endif

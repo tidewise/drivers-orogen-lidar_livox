@@ -87,5 +87,7 @@ task_context "Task" do
 
     output_port "point_cloud", "/base/samples/Pointcloud"
     output_port "lidar_status", "lidar_livox/LidarStateInfo"
+
+    periodic 1.0
 end
 
