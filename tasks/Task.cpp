@@ -80,8 +80,6 @@ Task::Task(std::string const& name)
 
 Task::~Task()
 {
-    SetLivoxLidarWorkMode(handle, kLivoxLidarWakeUp, nullptr, nullptr);
-    LivoxLidarSdkUninit();
 }
 
 bool Task::configureHook()
@@ -134,6 +132,8 @@ void Task::stopHook()
 
 void Task::cleanupHook()
 {
+    SetLivoxLidarWorkMode(handle, kLivoxLidarWakeUp, nullptr, nullptr);
+    LivoxLidarSdkUninit();
     TaskBase::cleanupHook();
 }
 
