@@ -14,6 +14,12 @@
 
 namespace lidar_livox {
 
+    enum LidarModel {
+        HAP_T1,
+        HAP_TX ,
+        MID_360
+    };
+
     struct LidarNetInfo {
         uint16_t cmd_data_port = 5600;
         uint16_t push_msg_port = 0;
@@ -36,21 +42,16 @@ namespace lidar_livox {
     };
 
     enum PointDataType {
-        ImuData = kLivoxLidarImuData,
-        CartesianCoordinateHighData = kLivoxLidarCartesianCoordinateHighData,
-        CartesianCoordinateLowData = kLivoxLidarCartesianCoordinateLowData,
-        SphericalCoordinateData = kLivoxLidarSphericalCoordinateData
+        IMU_DATA = kLivoxLidarImuData,
+        CARTESIAN_COORDINATE_HIGH_DATA = kLivoxLidarCartesianCoordinateHighData,
+        CARTESIAN_COORDINATE_LOW_DATA = kLivoxLidarCartesianCoordinateLowData,
+        SPHERICAL_COORDINATE_DATA = kLivoxLidarSphericalCoordinateData
     };
 
     enum ScanPattern {
-        NoneRepetive = kLivoxLidarScanPatternNoneRepetive,
-        Repetive = kLivoxLidarScanPatternRepetive,
-        LowFrameRate = kLivoxLidarScanPatternRepetiveLowFrameRate
-    };
-
-    enum LidarDetectMode {
-        DetectNormal = kLivoxLidarDetectNormal,
-        DetectSensitive = kLivoxLidarDetectSensitive
+        NONE_REPETIVE = kLivoxLidarScanPatternNoneRepetive,
+        REPETIVE = kLivoxLidarScanPatternRepetive,
+        LOW_FRAME_RATE = kLivoxLidarScanPatternRepetiveLowFrameRate
     };
 
     struct LidarInstallAttitude {
@@ -62,38 +63,15 @@ namespace lidar_livox {
         int32_t z = 0; // mm
     };
 
-    enum LidarGlassHeat {
-        StopPowerOnHeatingOrDiagnosticHeating =
-            kLivoxLidarStopPowerOnHeatingOrDiagnosticHeating,
-        TurnOnHeating = kLivoxLidarTurnOnHeating,
-        DiagnosticHeating = kLivoxLidarDiagnosticHeating,
-        StopSelfHeating = kLivoxLidarStopSelfHeating
-    };
-
-    struct LidarFovCfg {
-        int32_t yaw_start = 0;
-        int32_t yaw_stop = 0;
-        int32_t pitch_start = 0;
-        int32_t pitch_stop = 0;
-        uint32_t rsvd = 0;
-    };
-
-    struct LidarFuncIOCfg {
-        uint8_t in0 = 0;
-        uint8_t int1 = 0;
-        uint8_t out0 = 0;
-        uint8_t out1 = 0;
-    };
-
     enum LidarWorkMode {
-        WorkModeNormal = kLivoxLidarNormal,
-        WorkModeWakeUp = kLivoxLidarWakeUp,
-        WorkModeSleep = kLivoxLidarSleep,
-        WorkModeError = kLivoxLidarError,
-        WorkModePowerOnSelfTest = kLivoxLidarPowerOnSelfTest,
-        WorkModeMotorStarting = kLivoxLidarMotorStarting,
-        WorkModeMotorStoping = kLivoxLidarMotorStoping,
-        WorkModeUpgrade = kLivoxLidarUpgrade
+        WORK_MODE_NORMAL = kLivoxLidarNormal,
+        WORK_MODE_WAKE_UP = kLivoxLidarWakeUp,
+        WORK_MODE_SLEEP = kLivoxLidarSleep,
+        WORK_MODE_ERROR = kLivoxLidarError,
+        WORK_MODE_POWER_ON_SELF_TEST = kLivoxLidarPowerOnSelfTest,
+        WORK_MODE_MOTOR_STARTING = kLivoxLidarMotorStarting,
+        WORK_MODE_MOTOR_STOPING = kLivoxLidarMotorStoping,
+        WORK_MODE_UPGRADE = kLivoxLidarUpgrade
     };
 
     struct LivoxLidarLoggerCfgInfo {
@@ -103,71 +81,46 @@ namespace lidar_livox {
     };
 
     struct LidarIpInfo {
-        char ip_addr[16];  /**< IP address. */
-        char net_mask[16]; /**< Subnet mask. */
-        char gw_addr[16];  /**< Gateway address. */
+        char ip_addr[16] = {};  /**< IP address. */
+        char net_mask[16] = {}; /**< Subnet mask. */
+        char gw_addr[16] = {};  /**< Gateway address. */
     };
 
     struct HostStateInfoIpInfo {
-        char host_ip_addr[16]; /**< IP address. */
-        uint16_t host_state_info_port;
-        uint16_t lidar_state_info_port;
+        char host_ip_addr[16] = {}; /**< IP address. */
+        uint16_t host_state_info_port = 0;
+        uint16_t lidar_state_info_port = 0;
     };
 
     struct HostPointIPInfo {
-        char host_ip_addr[16]; /**< IP address. */
-        uint16_t host_point_data_port;
-        uint16_t lidar_point_data_port;
+        char host_ip_addr[16] = {}; /**< IP address. */
+        uint16_t host_point_data_port = 0;
+        uint16_t lidar_point_data_port = 0;
     };
 
     struct HostImuDataIPInfo {
-        char host_ip_addr[16];        /**< IP address. */
-        uint16_t host_imu_data_port;  // resv
-        uint16_t lidar_imu_data_port; // resv
+        char host_ip_addr[16] = {};        /**< IP address. */
+        uint16_t host_imu_data_port = 0;  // resv
+        uint16_t lidar_imu_data_port = 0; // resv
     };
 
     struct LidarStateInfo {
-        PointDataType pcl_data_type = PointDataType::ImuData;
-        ScanPattern pattern_mode = ScanPattern::NoneRepetive;
-        bool dual_emit_en = false;
-        bool point_send_en = false;
+        PointDataType pcl_data_type;
+        ScanPattern pattern_mode;
         lidar_livox::LidarIpInfo livox_lidar_ip_info;
         lidar_livox::HostStateInfoIpInfo host_state_info;
         lidar_livox::HostPointIPInfo host_point_ip_info;
         lidar_livox::HostImuDataIPInfo host_imu_data_ip_info;
         lidar_livox::LidarInstallAttitude install_attitude;
-        uint32_t blind_spot_set = 50;
-        LidarGlassHeat glass_heat = LidarGlassHeat::StopPowerOnHeatingOrDiagnosticHeating;
-        bool fusa_en = false;
-        LidarFovCfg fov_cfg0;
-        LidarFuncIOCfg fov_cfg1;
 
-        bool fov_en = false;
-        LidarDetectMode detect_mode = LidarDetectMode::DetectNormal;
-        uint8_t func_io_cfg[4]{0, 0, 0, 0};
         LidarWorkMode work_mode;
-        bool imu_data_en = false;
-        uint64_t status_code = 0;
+        bool imu_data_en;
         char sn[16] = {};
         char product_info[64] = {};
         uint8_t version_app[4] = {};
         uint8_t version_load[4] = {};
         uint8_t version_hardware[4] = {};
         uint8_t mac[6] = {};
-
-        LidarWorkMode cur_work_state = LidarWorkMode::WorkModeNormal;
-        int32_t core_temp = 0;
-        uint32_t power_up_cnt = 0;
-
-        uint64_t local_time_now = 0;
-        uint64_t last_sync_time = 0;
-        int64_t time_offset = 0;
-
-        uint8_t time_sync_type = 0;
-
-        uint16_t diag_status = 0;
-        uint8_t fw_type = 0;
-        uint32_t hms_code[8] = {};
     };
 }
 #endif

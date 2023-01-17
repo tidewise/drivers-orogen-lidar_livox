@@ -8,6 +8,7 @@
 #include "livox_lidar_def.h"
 #include <base/samples/Pointcloud.hpp>
 #include <condition_variable>
+#include <map>
 #include <mutex>
 
 namespace lidar_livox {
@@ -57,6 +58,25 @@ argument.
             "Handler implementation not exist.",
             "Command send failed.",
         };
+
+        const std::map<int, std::string> m_return_code{
+            {0x00,              "Execution succeed"                  },
+            {0x01,                                 "Execution failed"},
+            {0x02,                   "Current state does not support"},
+            {0x03,                       "Setting value out of range"},
+            {0x20,                   "The parameter is not supported"},
+            {0x21,         "Parameters need to reboot to take effect"},
+            {0x22, "The parameter is read-only and cannot be written"},
+            {0x23,
+             "The request parameter length is wrong, or the ack packet exceeds the "
+             "maximum length"                                        },
+            {0x24,        "Parameter key_ num and key_ list mismatch"},
+            {0x30,          "Public key signature verification error"},
+            {0x31,                               "Digest check error"},
+            {0x32,                           "Firmware type mismatch"},
+            {0x33,                     "Firmware length out of range"}
+        };
+
         LidarStateInfo m_lidar_state_info;
 
     public:
@@ -138,6 +158,10 @@ argument.
         void notifyCommandSuccess();
         void notifyCommandFailure(int error_code);
         void waitForCommandSuccess();
+        void handleCommandReturnValue(livox_status);
+
+        void lidarStatusFailure(livox_status);
+
         void proccessInfoData(LivoxLidarDiagInternalInfoResponse* response);
     };
 }
