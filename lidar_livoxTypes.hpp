@@ -20,23 +20,34 @@ namespace lidar_livox {
         MID_360
     };
 
+    // Lidar Configuration
     struct LidarNetInfo {
+        // Device type query
         uint16_t cmd_data_port = 5600;
         uint16_t push_msg_port = 0;
+        // Point cloud data
         uint16_t point_data_port = 5700;
+        // IMU data port
         uint16_t imu_data_port = 5800;
+        //Log data port
         uint16_t log_data_port = 5900;
     };
 
+    // Host Configuration
     struct HostNetInfo {
+        // IP and Port related to sending command and receiving feedback
         std::string cmd_data_ip = "192.168.1.50";
         uint16_t cmd_data_port = 5600;
+        // Not used
         std::string push_msg_ip = "";
         uint16_t push_msg_port = 0;
+        // Ip and Port used to receive the pointcloud data
         std::string point_data_ip = "192.168.1.50";
         uint16_t point_data_port = 5700;
+        // Ip and Port used to receive the IMU
         std::string imu_data_ip = "192.168.1.50";
         uint16_t imu_data_port = 5800;
+        // Ip and Port used to receive the logs
         std::string log_data_ip = "";
         uint16_t log_data_port = 5900;
     };

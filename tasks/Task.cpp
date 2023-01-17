@@ -122,9 +122,6 @@ bool Task::startHook()
 void Task::updateHook()
 {
     TaskBase::updateHook();
-    QueryLivoxLidarInternalInfo(handle, queryInternalInfoCallback, this);
-    waitForCommandSuccess();
-    _lidar_status.write(m_lidar_state_info);
 }
 
 void Task::errorHook()
@@ -174,7 +171,23 @@ std::string Task::manageJsonFile()
 
     hap["lidar_net_info"] = lidar_net_info;
     hap["host_net_info"] = host_net_info;
-    data["HAP"] = hap;
+
+    switch (_lidar_model.get()) {
+        case LidarModel::HAP_T1:
+            data["HAP"] = hap;
+            break;
+
+        case LidarModel::HAP_TX:
+            data["HAP"] = hap;
+            break;
+
+        case LidarModel::MID_360:
+            data["MID360"];
+            break;
+
+        default:
+            LOG_ERROR_S << "Device Model configuration not found." << endl;
+    }
 
     while (true) {
         auto time = base::Time::now();
@@ -217,6 +230,10 @@ void Task::processPointcloudData(LivoxLidarEthernetPacket const* data)
                 m_point_cloud.points.push_back(base::Point(p_point_data[i].x / 1000.0,
                     p_point_data[i].y / 1000.0,
                     p_point_data[i].z / 1000.0));
+                if (_pointcloud_with_color_based_on_reflexivity.get()) {
+                    m_point_cloud.colors.push_back(
+                        colorByReflectivity(p_point_data[i].reflectivity));
+                }
             }
 
             if (++m_measurements_merged == m_measurements_to_merge) {
@@ -227,8 +244,7 @@ void Task::processPointcloudData(LivoxLidarEthernetPacket const* data)
             }
         } break;
 
-        case kLivoxLidarCartesianCoordinateLowData:
-        {
+        case kLivoxLidarCartesianCoordinateLowData: {
             LivoxLidarCartesianLowRawPoint const* p_point_data =
                 reinterpret_cast<LivoxLidarCartesianLowRawPoint const*>(data->data);
 
@@ -244,6 +260,10 @@ void Task::processPointcloudData(LivoxLidarEthernetPacket const* data)
                 m_point_cloud.points.push_back(base::Point(p_point_data[i].x / 100.0,
                     p_point_data[i].y / 100.0,
                     p_point_data[i].z / 100.0));
+                if (_pointcloud_with_color_based_on_reflexivity.get()) {
+                    m_point_cloud.colors.push_back(
+                        colorByReflectivity(p_point_data[i].reflectivity));
+                }
             }
 
             if (++m_measurements_merged == m_measurements_to_merge) {
@@ -252,8 +272,7 @@ void Task::processPointcloudData(LivoxLidarEthernetPacket const* data)
                 m_point_cloud.points.clear();
                 m_measurements_merged = 0;
             }
-        }
-            break;
+        } break;
 
         case kLivoxLidarSphericalCoordinateData:
             LOG_ERROR_S << "Spherical Coordinate Data not implemented yet." << endl;
@@ -264,6 +283,33 @@ void Task::processPointcloudData(LivoxLidarEthernetPacket const* data)
     }
 }
 
+base::Vector4d Task::colorByReflectivity(uint8_t reflectivity)
+{
+    if (reflectivity < 30) {
+        return base::Vector4d(0,
+            static_cast<int>(reflectivity * 255 / 30) & 0xff,
+            0xff,
+            0xff);
+    }
+    else if (reflectivity < 90) {
+        return base::Vector4d(0,
+            0xff,
+            static_cast<int>((90 - reflectivity) * 255 / 60) & 0xff,
+            0xff);
+    }
+    else if (reflectivity < 150) {
+        return base::Vector4d(static_cast<int>((reflectivity - 90) * 255 / 60) & 0xff,
+            0xff,
+            0,
+            0xff);
+    }
+    else {
+        return base::Vector4d(0xff,
+            static_cast<int>((255 - reflectivity) * 255 / (256 - 150)) & 0xff,
+            0,
+            0xff);
+    }
+}
 void Task::notifyCommandSuccess()
 {
     unique_lock<std::mutex> lock(m_command_sync_mutex);

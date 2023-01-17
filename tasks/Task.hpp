@@ -6,6 +6,7 @@
 #include "lidar_livox/TaskBase.hpp"
 #include "livox_lidar_api.h"
 #include "livox_lidar_def.h"
+#include <base/Point.hpp>
 #include <base/samples/Pointcloud.hpp>
 #include <condition_variable>
 #include <map>
@@ -41,7 +42,6 @@ argument.
         std::mutex m_command_sync_mutex;
         std::condition_variable m_command_sync_condition;
         int m_error_code = 0;
-
         int m_measurements_to_merge = 0;
         int m_measurements_merged = 0;
         base::samples::Pointcloud m_point_cloud;
@@ -149,20 +149,34 @@ argument.
          */
         void cleanupHook();
 
-        std::string manageJsonFile();
-        void processPointcloudData(LivoxLidarEthernetPacket const* data);
-        LivoxLidarWorkMode state = kLivoxLidarWakeUp;
+        // Handle used to communicate with lidar
         uint32_t handle;
+
+        /** This function is used to create a json file from orogen configurations
+         *  The returned object will be the path of the created json file
+         */
+        std::string manageJsonFile();
+
+        /** This function converts the received pointcloud data into a syskit point cloud
+         * data and publishes it.
+         */
+        void processPointcloudData(LivoxLidarEthernetPacket const* data);
+
+        /** This function configures the lidar with orogen configuration
+         */
         bool configureLidar();
 
         void notifyCommandSuccess();
-        void notifyCommandFailure(int error_code);
         void waitForCommandSuccess();
         void handleCommandReturnValue(livox_status);
-
+        void notifyCommandFailure(int error_code);
         void lidarStatusFailure(livox_status);
 
         void proccessInfoData(LivoxLidarDiagInternalInfoResponse* response);
+
+        /** Provides a colorscale based on reflectivity
+         */
+        base::Vector4d colorByReflectivity(uint8_t reflectivity);
     };
 }
 

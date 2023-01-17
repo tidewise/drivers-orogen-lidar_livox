@@ -22,8 +22,11 @@ import_types_from "base"
 task_context "Task" do
     needs_configuration
     property "lidar_model", "/lidar_livox/LidarModel", "HAP_T1"
+
     property "lidar_net_info", "/lidar_livox/LidarNetInfo"
     property "host_net_info", "/lidar_livox/HostNetInfo"
+
+    property "pointcloud_with_color_based_on_reflexivity", "bool", false
     property "number_of_measurements_per_pointcloud", "int"
 
     # timeout in milliseconds
@@ -80,8 +83,5 @@ task_context "Task" do
     property "enable_fusa_function", "bool", false
 
     output_port "point_cloud", "/base/samples/Pointcloud"
-    output_port "lidar_status", "lidar_livox/LidarStateInfo"
-
-    periodic 1.0
 end
 
