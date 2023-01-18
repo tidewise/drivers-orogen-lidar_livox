@@ -435,7 +435,7 @@ bool Task::configureLidar()
     }
 
     auto enable_dual_emit = _dual_emit.get();
-    LOG_INFO_S << "Enabling dual emit." << endl;
+    LOG_INFO_S << "Dual emit: " << enable_dual_emit << endl;
     applyCommand(
         SetLivoxLidarDualEmit(handle, enable_dual_emit, configurationSetCallback, this));
     // No feedback from QueryLivoxLidarInternalInfo
@@ -444,6 +444,9 @@ bool Task::configureLidar()
     LOG_INFO_S << "Configuring install attitude." << endl;
     LivoxLidarInstallAttitude livox_attitude;
     memcpy(&livox_attitude, &attitude, sizeof(attitude));
+    livox_attitude.x *= 1000;
+    livox_attitude.y *= 1000;
+    livox_attitude.z *= 1000;
     applyCommand(SetLivoxLidarInstallAttitude(handle,
         &livox_attitude,
         configurationSetCallback,
@@ -575,6 +578,9 @@ void Task::proccessInfoData(LivoxLidarDiagInternalInfoResponse* response)
             }
             case kKeyInstallAttitude:
                 memcpy(&m_lidar_state_info.install_attitude, &(kv->value[0]), kv->length);
+                m_lidar_state_info.install_attitude.x /= 1000.0;
+                m_lidar_state_info.install_attitude.y /= 1000.0;
+                m_lidar_state_info.install_attitude.z /= 1000.0;
                 break;
             case kKeyWorkMode:
                 m_lidar_state_info.work_mode = static_cast<LidarWorkMode>(kv->value[0]);

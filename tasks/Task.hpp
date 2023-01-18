@@ -39,6 +39,8 @@ argument.
         friend class TaskBase;
 
     private:
+        LidarStateInfo m_lidar_state_info;
+
         std::mutex m_command_sync_mutex;
         std::condition_variable m_command_sync_condition;
         bool m_command_completed = false;
@@ -91,8 +93,6 @@ argument.
             {  LidarReturnCode::UPGRADE_FW_TYPE_ERROR,         "Firmware type mismatch"},
             {LidarReturnCode::UPGRADE_FW_OUT_OF_RANGE,   "Firmware length out of range"}
         };
-
-        LidarStateInfo m_lidar_state_info;
 
     public:
         /** TaskContext constructor for Task

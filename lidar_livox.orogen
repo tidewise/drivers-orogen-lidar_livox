@@ -26,7 +26,10 @@ task_context "Task" do
     property "lidar_net_info", "/lidar_livox/LidarNetInfo"
     property "host_net_info", "/lidar_livox/HostNetInfo"
 
+    # base on:
+    # https://github.com/Livox-SDK/Livox-SDK2/wiki/Livox-Viewer#1-color-coding-strategy
     property "pointcloud_with_color_based_on_reflexivity", "bool", false
+
     property "frequency", "int", 10
 
     # timeout in milliseconds
@@ -44,12 +47,7 @@ task_context "Task" do
     # Note: After setting, the LiDAR needs to reboot, the default value is NoneRepetive
     property "scan_pattern", "/lidar_livox/ScanPattern"
 
-    property "dual_emit", "bool"
-
-    # Enable/Disable point cloud
-    # Note: The function takes effect in real time,
-    # and the default value 0x00 will be restored after rebooting
-    property "send_point_cloud", "bool"
+    property "dual_emit", "bool", false
 
     # Installation location of LiDAR on the user's system.
     # This information is not processed internally by LiDAR.
@@ -64,8 +62,8 @@ task_context "Task" do
 
     # Glass heating enable option
     # Note:
-    # 1. The heating can only be turned on for a maximum of 3 minutes at a power cycle time,
-    # otherwise the window heating mode will be automatically exited,
+    # 1. The heating can only be turned on for a maximum of 3 minutes at a power cycle
+    # time, otherwise the window heating mode will be automatically exited,
     # and the heating request will not be responded.
     # 2. Heating will not be performed in ERROR state.
     property "enable_glass_heat", "bool", false
@@ -84,4 +82,3 @@ task_context "Task" do
 
     output_port "point_cloud", "/base/samples/Pointcloud"
 end
-
