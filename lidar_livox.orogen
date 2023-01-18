@@ -27,7 +27,7 @@ task_context "Task" do
     property "host_net_info", "/lidar_livox/HostNetInfo"
 
     property "pointcloud_with_color_based_on_reflexivity", "bool", false
-    property "number_of_measurements_per_pointcloud", "int"
+    property "frequency", "int", 10
 
     # timeout in milliseconds
     property "timeout", "/base/Time"

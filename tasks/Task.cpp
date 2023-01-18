@@ -98,7 +98,6 @@ bool Task::configureHook()
         LivoxLidarSdkUninit();
         return false;
     }
-    m_measurements_to_merge = _number_of_measurements_per_pointcloud.get();
 
     m_command_completed = false;
     SetLivoxLidarInfoChangeCallback(lidarInfoChangeCallback, this);
@@ -249,12 +248,12 @@ void Task::convertPointcloud(LivoxLidarEthernetPacket const* data,
         }
     }
 
-    if (++m_measurements_merged == m_measurements_to_merge) {
+    if (base::Time::now() - m_point_cloud.time >=
+        base::Time::fromSeconds(1.0 / _frequency.get())) {
         _point_cloud.write(m_point_cloud);
         m_point_cloud.time = base::Time::now();
         m_point_cloud.points.clear();
         m_point_cloud.colors.clear();
-        m_measurements_merged = 0;
     }
 }
 

@@ -48,8 +48,6 @@ argument.
         bool m_pointcloud_received = false;
 
         int m_error_code = 0;
-        int m_measurements_to_merge = 0;
-        int m_measurements_merged = 0;
         base::samples::Pointcloud m_point_cloud;
 
         template <typename F> void applyCommand(F f);
@@ -192,6 +190,8 @@ argument.
         void proccessInfoData(LivoxLidarDiagInternalInfoResponse* response);
 
         /** Provides a colorscale based on reflectivity
+         *  based on:
+         * https://github.com/Livox-SDK/Livox-SDK2/wiki/Livox-Viewer#1-color-coding-strategy
          */
         base::Vector4d colorByReflectivity(uint8_t reflectivity);
 

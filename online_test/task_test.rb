@@ -95,7 +95,7 @@ describe OroGen.lidar_livox.Task do
         task.properties.host_net_info.log_data_port = 5_900
 
         task.properties.lidar_model = "HAP_T1"
-        task.properties.number_of_measurements_per_pointcloud = 500
+        task.properties.frequency = 10
         task.properties.pointcloud_with_color_based_on_reflexivity = true
         task.properties.timeout = Time.at(20)
         task.properties.point_data_type = Types.lidar_livox.PointDataType.new
