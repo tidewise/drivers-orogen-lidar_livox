@@ -41,10 +41,23 @@ argument.
     private:
         std::mutex m_command_sync_mutex;
         std::condition_variable m_command_sync_condition;
+        bool m_command_completed = false;
+
+        std::mutex m_pointcloud_sync_mutex;
+        std::condition_variable m_pointcloud_sync_condition;
+        bool m_pointcloud_received = false;
+
         int m_error_code = 0;
         int m_measurements_to_merge = 0;
         int m_measurements_merged = 0;
         base::samples::Pointcloud m_point_cloud;
+
+        template <typename F> void applyCommand(F f);
+
+        template <typename F>
+        void convertPointcloud(LivoxLidarEthernetPacket const* data,
+            F const* point_data,
+            float base);
 
         const std::array<std::string, 10> m_lidar_status = {
             "Success.",
@@ -59,22 +72,26 @@ argument.
             "Command send failed.",
         };
 
-        const std::map<int, std::string> m_return_code{
-            {0x00,              "Execution succeed"                  },
-            {0x01,                                 "Execution failed"},
-            {0x02,                   "Current state does not support"},
-            {0x03,                       "Setting value out of range"},
-            {0x20,                   "The parameter is not supported"},
-            {0x21,         "Parameters need to reboot to take effect"},
-            {0x22, "The parameter is read-only and cannot be written"},
-            {0x23,
+        const std::map<LidarReturnCode, std::string> m_return_code{
+            {                LidarReturnCode::SUCCESS,"Execution succeed"                                                      },
+            {                LidarReturnCode::FAILURE,               "Execution failed"},
+            {         LidarReturnCode::NOT_PERMIT_NOW, "Current state does not support"},
+            {           LidarReturnCode::OUT_OF_RANGE,     "Setting value out of range"},
+            {       LidarReturnCode::PARAM_NOTSUPPORT, "The parameter is not supported"},
+            {    LidarReturnCode::PARAM_REBOOT_EFFECT,
+             "Parameters need to reboot to take effect"                                },
+            {          LidarReturnCode::PARAM_RD_ONLY,
+             "The parameter is read-only and cannot be written"                        },
+            {      LidarReturnCode::PARAM_INVALID_LEN,
              "The request parameter length is wrong, or the ack packet exceeds the "
-             "maximum length"                                        },
-            {0x24,        "Parameter key_ num and key_ list mismatch"},
-            {0x30,          "Public key signature verification error"},
-            {0x31,                               "Digest check error"},
-            {0x32,                           "Firmware type mismatch"},
-            {0x33,                     "Firmware length out of range"}
+             "maximum length"                                                          },
+            {      LidarReturnCode::PARAM_KEY_NUM_ERR,
+             "Parameter key_ num and key_ list mismatch"                               },
+            {  LidarReturnCode::UPGRADE_PUB_KEY_ERROR,
+             "Public key signature verification error"                                 },
+            {   LidarReturnCode::UPGRADE_DIGEST_ERROR,             "Digest check error"},
+            {  LidarReturnCode::UPGRADE_FW_TYPE_ERROR,         "Firmware type mismatch"},
+            {LidarReturnCode::UPGRADE_FW_OUT_OF_RANGE,   "Firmware length out of range"}
         };
 
         LidarStateInfo m_lidar_state_info;
@@ -177,6 +194,9 @@ argument.
         /** Provides a colorscale based on reflectivity
          */
         base::Vector4d colorByReflectivity(uint8_t reflectivity);
+
+        void updatePointcloudReceivedStatus(bool status);
+        void waitForPointcloudSuccess();
     };
 }
 

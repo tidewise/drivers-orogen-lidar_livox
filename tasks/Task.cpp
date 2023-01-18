@@ -8,6 +8,7 @@
 #include <fstream>
 
 using namespace std;
+using namespace chrono;
 using namespace lidar_livox;
 
 void pointCloudCallback(uint32_t handle,
@@ -38,8 +39,9 @@ void configurationSetCallback(livox_status status,
                << ", return code:" << unsigned(response->ret_code)
                << ", key with error: " << unsigned(response->error_key) << endl;
 
-    response->ret_code == 0 ? task.notifyCommandSuccess()
-                            : task.notifyCommandFailure(response->ret_code);
+    response->ret_code == LidarReturnCode::SUCCESS
+        ? task.notifyCommandSuccess()
+        : task.notifyCommandFailure(response->ret_code);
 }
 
 void queryInternalInfoCallback(livox_status status,
@@ -97,10 +99,13 @@ bool Task::configureHook()
         return false;
     }
     m_measurements_to_merge = _number_of_measurements_per_pointcloud.get();
+
+    m_command_completed = false;
     SetLivoxLidarInfoChangeCallback(lidarInfoChangeCallback, this);
     waitForCommandSuccess();
-    auto status = QueryLivoxLidarInternalInfo(handle, queryInternalInfoCallback, this);
-    status == 0 ? waitForCommandSuccess() : lidarStatusFailure(status);
+
+    applyCommand(QueryLivoxLidarInternalInfo(handle, queryInternalInfoCallback, this));
+
     if (!configureLidar()) {
         LOG_ERROR_S << "Failed to configure the lidar!" << std::endl;
         return false;
@@ -113,9 +118,15 @@ bool Task::startHook()
 {
     if (!TaskBase::startHook())
         return false;
-    SetLivoxLidarWorkMode(handle, kLivoxLidarNormal, configurationSetCallback, this);
-    waitForCommandSuccess();
+
+    updatePointcloudReceivedStatus(false);
+
+    // Start Motor
+    applyCommand(
+        SetLivoxLidarWorkMode(handle, kLivoxLidarNormal, configurationSetCallback, this));
+
     SetLivoxLidarPointCloudCallBack(pointCloudCallback, this);
+    waitForPointcloudSuccess();
     return true;
 }
 
@@ -127,18 +138,21 @@ void Task::updateHook()
 void Task::errorHook()
 {
     TaskBase::errorHook();
-    SetLivoxLidarWorkMode(handle, kLivoxLidarWakeUp, configurationSetCallback, nullptr);
+    applyCommand(
+        SetLivoxLidarWorkMode(handle, kLivoxLidarWakeUp, configurationSetCallback, this));
 }
 
 void Task::stopHook()
 {
     TaskBase::stopHook();
-    SetLivoxLidarWorkMode(handle, kLivoxLidarWakeUp, configurationSetCallback, nullptr);
+    applyCommand(
+        SetLivoxLidarWorkMode(handle, kLivoxLidarWakeUp, configurationSetCallback, this));
+
+    SetLivoxLidarPointCloudCallBack(nullptr, this);
 }
 
 void Task::cleanupHook()
 {
-    SetLivoxLidarWorkMode(handle, kLivoxLidarWakeUp, nullptr, nullptr);
     LivoxLidarSdkUninit();
     TaskBase::cleanupHook();
 }
@@ -146,7 +160,7 @@ void Task::cleanupHook()
 std::string Task::manageJsonFile()
 {
     Json::Value data;
-    Json::Value hap;
+    Json::Value lidar;
     Json::Value lidar_net_info;
     Json::Value host_net_info;
 
@@ -169,24 +183,25 @@ std::string Task::manageJsonFile()
     host_net_info["log_data_ip"] = host_config.log_data_ip;
     host_net_info["log_data_port"] = host_config.log_data_port;
 
-    hap["lidar_net_info"] = lidar_net_info;
-    hap["host_net_info"] = host_net_info;
+    lidar["lidar_net_info"] = lidar_net_info;
+    lidar["host_net_info"] = host_net_info;
 
     switch (_lidar_model.get()) {
         case LidarModel::HAP_T1:
-            data["HAP"] = hap;
+            data["HAP"] = lidar;
             break;
 
         case LidarModel::HAP_TX:
-            data["HAP"] = hap;
+            data["HAP"] = lidar;
             break;
 
         case LidarModel::MID_360:
-            data["MID360"];
+            data["MID360"] = lidar;
             break;
 
         default:
             LOG_ERROR_S << "Device Model configuration not found." << endl;
+            return "";
     }
 
     while (true) {
@@ -211,67 +226,76 @@ std::string Task::manageJsonFile()
     return "";
 }
 
+template <typename F>
+void Task::convertPointcloud(LivoxLidarEthernetPacket const* data,
+    F const* p_point_data,
+    float unit_base)
+{
+    if (m_point_cloud.time.isNull()) {
+        m_point_cloud.time = base::Time::now();
+    }
+
+    for (uint32_t i = 0; i < data->dot_num; i++) {
+        if (!p_point_data[i].x && !p_point_data[i].y && !p_point_data[i].z) {
+            continue;
+        }
+
+        m_point_cloud.points.push_back(base::Point(p_point_data[i].x / unit_base,
+            p_point_data[i].y / unit_base,
+            p_point_data[i].z / unit_base));
+        if (_pointcloud_with_color_based_on_reflexivity.get()) {
+            m_point_cloud.colors.push_back(
+                colorByReflectivity(p_point_data[i].reflectivity));
+        }
+    }
+
+    if (++m_measurements_merged == m_measurements_to_merge) {
+        _point_cloud.write(m_point_cloud);
+        m_point_cloud.time = base::Time::now();
+        m_point_cloud.points.clear();
+        m_point_cloud.colors.clear();
+        m_measurements_merged = 0;
+    }
+}
+
+void Task::updatePointcloudReceivedStatus(bool status)
+{
+    {
+        unique_lock<std::mutex> lock(m_pointcloud_sync_mutex);
+        m_pointcloud_received = status;
+    }
+    m_pointcloud_sync_condition.notify_all();
+}
+
+void Task::waitForPointcloudSuccess()
+{
+    unique_lock<std::mutex> lock(m_pointcloud_sync_mutex);
+    while (!m_pointcloud_received) {
+        // At the moment if something fails, e.g. configuration or timeout and exception
+        if (m_pointcloud_sync_condition.wait_for(lock,
+                static_cast<std::chrono::milliseconds>(
+                    _timeout.get().toMilliseconds())) == std::cv_status::timeout) {
+            LOG_ERROR_S << "Still waiting for pointcloud." << endl;
+        }
+    }
+}
 void Task::processPointcloudData(LivoxLidarEthernetPacket const* data)
 {
+    if (m_pointcloud_received == false) {
+        updatePointcloudReceivedStatus(true);
+    }
+
     switch (data->data_type) {
         case kLivoxLidarCartesianCoordinateHighData: {
             LivoxLidarCartesianHighRawPoint const* p_point_data =
                 reinterpret_cast<LivoxLidarCartesianHighRawPoint const*>(data->data);
-
-            if (m_point_cloud.time.isNull()) {
-                m_point_cloud.time = base::Time::now();
-            }
-
-            for (uint32_t i = 0; i < data->dot_num; i++) {
-                if (!p_point_data[i].x && !p_point_data[i].y && !p_point_data[i].z) {
-                    continue;
-                }
-
-                m_point_cloud.points.push_back(base::Point(p_point_data[i].x / 1000.0,
-                    p_point_data[i].y / 1000.0,
-                    p_point_data[i].z / 1000.0));
-                if (_pointcloud_with_color_based_on_reflexivity.get()) {
-                    m_point_cloud.colors.push_back(
-                        colorByReflectivity(p_point_data[i].reflectivity));
-                }
-            }
-
-            if (++m_measurements_merged == m_measurements_to_merge) {
-                _point_cloud.write(m_point_cloud);
-                m_point_cloud.time = base::Time();
-                m_point_cloud.points.clear();
-                m_measurements_merged = 0;
-            }
+            convertPointcloud(data, p_point_data, 1000);
         } break;
 
         case kLivoxLidarCartesianCoordinateLowData: {
             LivoxLidarCartesianLowRawPoint const* p_point_data =
                 reinterpret_cast<LivoxLidarCartesianLowRawPoint const*>(data->data);
-
-            if (m_point_cloud.time.isNull()) {
-                m_point_cloud.time = base::Time::now();
-            }
-
-            for (uint32_t i = 0; i < data->dot_num; i++) {
-                if (!p_point_data[i].x && !p_point_data[i].y && !p_point_data[i].z) {
-                    continue;
-                }
-
-                m_point_cloud.points.push_back(base::Point(p_point_data[i].x / 100.0,
-                    p_point_data[i].y / 100.0,
-                    p_point_data[i].z / 100.0));
-                if (_pointcloud_with_color_based_on_reflexivity.get()) {
-                    m_point_cloud.colors.push_back(
-                        colorByReflectivity(p_point_data[i].reflectivity));
-                }
-            }
-
-            if (++m_measurements_merged == m_measurements_to_merge) {
-                _point_cloud.write(m_point_cloud);
-                m_point_cloud.time = base::Time();
-                m_point_cloud.points.clear();
-                m_measurements_merged = 0;
-            }
+            convertPointcloud(data, p_point_data, 100);
         } break;
 
         case kLivoxLidarSphericalCoordinateData:
@@ -310,9 +334,11 @@ base::Vector4d Task::colorByReflectivity(uint8_t reflectivity)
             0xff);
     }
 }
+
 void Task::notifyCommandSuccess()
 {
     unique_lock<std::mutex> lock(m_command_sync_mutex);
+    m_command_completed = true;
     m_error_code = 0;
     m_command_sync_condition.notify_all();
 }
@@ -320,6 +346,7 @@ void Task::notifyCommandSuccess()
 void Task::notifyCommandFailure(int error_code)
 {
     unique_lock<std::mutex> lock(m_command_sync_mutex);
+    m_command_completed = true;
     m_error_code = error_code;
     m_command_sync_condition.notify_all();
 }
@@ -327,19 +354,22 @@ void Task::notifyCommandFailure(int error_code)
 void Task::waitForCommandSuccess()
 {
     unique_lock<std::mutex> lock(m_command_sync_mutex);
-    auto now = std::chrono::system_clock::now();
-
-    // At the moment if something fails, e.g. configuration or timeout and exception is
-    // thrown and the sensor component will quit.
-    if (m_command_sync_condition.wait_until(lock,
-            now + std::chrono::milliseconds(_timeout.get())) == std::cv_status::timeout) {
-        LOG_ERROR_S << "Error code: " << 4 << endl;
-        throw std::runtime_error(m_lidar_status.at(4));
+    while (!m_command_completed) {
+        // At the moment if something fails, e.g. configuration or timeout and exception
+        // is thrown and the sensor component will quit.
+        if (m_command_sync_condition.wait_for(lock,
+                static_cast<std::chrono::milliseconds>(
+                    _timeout.get().toMilliseconds())) == std::cv_status::timeout) {
+            LOG_ERROR_S << "Error code: " << 4 << endl;
+            throw std::runtime_error(m_lidar_status.at(4));
+        }
     }
+
     if (m_error_code) {
         try {
             LOG_ERROR_S << "Error code: " << m_error_code << endl;
-            throw std::runtime_error(m_return_code.at(m_error_code));
+            throw std::runtime_error(
+                m_return_code.at(static_cast<LidarReturnCode>(m_error_code)));
         }
         catch (const std::out_of_range& e) {
             LOG_ERROR_S << "Error code: " << m_error_code << endl;
@@ -358,26 +388,32 @@ void Task::lidarStatusFailure(livox_status status)
     }
 }
 
+template <typename F> void Task::applyCommand(F f)
+{
+    m_command_completed = false;
+    auto status = F();
+    status == LidarReturnCode::SUCCESS ? waitForCommandSuccess()
+                                       : lidarStatusFailure(status);
+}
+
 bool Task::configureLidar()
 {
-    auto status = QueryLivoxLidarInternalInfo(handle, queryInternalInfoCallback, this);
-    status == 0 ? waitForCommandSuccess() : lidarStatusFailure(status);
+    applyCommand(QueryLivoxLidarInternalInfo(handle, queryInternalInfoCallback, this));
 
-    // This configuration reboots the lidar.
+    // This configuration reboots the lidar. It must be first, since all other settings
+    // are reset
     auto scan_pattern = _scan_pattern.get();
     if (scan_pattern != m_lidar_state_info.pattern_mode) {
         LOG_INFO_S << "Configuring scan pattern."
                    << " Current: " << m_lidar_state_info.pattern_mode
                    << " desired: " << scan_pattern << endl;
-        status = SetLivoxLidarScanPattern(handle,
+        applyCommand(SetLivoxLidarScanPattern(handle,
             static_cast<LivoxLidarScanPattern>(scan_pattern),
             configurationSetCallback,
-            this);
-        status == 0 ? waitForCommandSuccess() : lidarStatusFailure(status);
+            this));
     }
 
-    status = QueryLivoxLidarInternalInfo(handle, queryInternalInfoCallback, this);
-    status == 0 ? waitForCommandSuccess() : lidarStatusFailure(status);
+    applyCommand(QueryLivoxLidarInternalInfo(handle, queryInternalInfoCallback, this));
     if (scan_pattern != m_lidar_state_info.pattern_mode) {
         LOG_ERROR_S << " Failed configuring scan pattern!!" << endl;
     }
@@ -388,38 +424,33 @@ bool Task::configureLidar()
                    << " Current: " << m_lidar_state_info.pcl_data_type
                    << " desired: " << point_data_type << endl;
 
-        status = SetLivoxLidarPclDataType(handle,
+        applyCommand(SetLivoxLidarPclDataType(handle,
             static_cast<LivoxLidarPointDataType>(point_data_type),
             configurationSetCallback,
-            this);
-        status == 0 ? waitForCommandSuccess() : lidarStatusFailure(status);
+            this));
     }
 
-    status = QueryLivoxLidarInternalInfo(handle, queryInternalInfoCallback, this);
-    status == 0 ? waitForCommandSuccess() : lidarStatusFailure(status);
+    applyCommand(QueryLivoxLidarInternalInfo(handle, queryInternalInfoCallback, this));
     if (point_data_type != m_lidar_state_info.pcl_data_type) {
         LOG_ERROR_S << "Failed configuring pointcloud data type." << endl;
     }
 
     auto enable_dual_emit = _dual_emit.get();
     LOG_INFO_S << "Enabling dual emit." << endl;
-    status =
-        SetLivoxLidarDualEmit(handle, enable_dual_emit, configurationSetCallback, this);
-    status == 0 ? waitForCommandSuccess() : lidarStatusFailure(status);
+    applyCommand(
+        SetLivoxLidarDualEmit(handle, enable_dual_emit, configurationSetCallback, this));
     // No feedback from QueryLivoxLidarInternalInfo
 
     auto attitude = _install_attitude.get();
     LOG_INFO_S << "Configuring install attitude." << endl;
     LivoxLidarInstallAttitude livox_attitude;
     memcpy(&livox_attitude, &attitude, sizeof(attitude));
-    status = SetLivoxLidarInstallAttitude(handle,
+    applyCommand(SetLivoxLidarInstallAttitude(handle,
         &livox_attitude,
         configurationSetCallback,
-        this);
-    status == 0 ? waitForCommandSuccess() : lidarStatusFailure(status);
+        this));
 
-    status = QueryLivoxLidarInternalInfo(handle, queryInternalInfoCallback, this);
-    status == 0 ? waitForCommandSuccess() : lidarStatusFailure(status);
+    applyCommand(QueryLivoxLidarInternalInfo(handle, queryInternalInfoCallback, this));
     if (attitude.roll_deg != m_lidar_state_info.install_attitude.roll_deg ||
         attitude.pitch_deg != m_lidar_state_info.install_attitude.pitch_deg ||
         attitude.yaw_deg != m_lidar_state_info.install_attitude.yaw_deg ||
@@ -431,24 +462,21 @@ bool Task::configureLidar()
 
     auto blind_spot = _blind_spot.get();
     LOG_INFO_S << "Configuring blind spot. Desired: " << blind_spot << endl;
-    status = SetLivoxLidarBlindSpot(handle,
+    applyCommand(SetLivoxLidarBlindSpot(handle,
         static_cast<uint32_t>(blind_spot * 100),
         configurationSetCallback,
-        this);
-    status == 0 ? waitForCommandSuccess() : lidarStatusFailure(status);
+        this));
     // No feedback from QueryLivoxLidarInternalInfo
 
     auto enable_glass_heat = _enable_glass_heat.get();
     if (enable_glass_heat) {
         LOG_INFO_S << "Enabling glass heat." << endl;
-        status = EnableLivoxLidarGlassHeat(handle, configurationSetCallback, this);
-        status == 0 ? waitForCommandSuccess() : lidarStatusFailure(status);
+        applyCommand(EnableLivoxLidarGlassHeat(handle, configurationSetCallback, this));
         // No feedback from QueryLivoxLidarInternalInfo
     }
     else {
         LOG_INFO_S << "Disabling glass heat." << endl;
-        status = DisableLivoxLidarGlassHeat(handle, configurationSetCallback, this);
-        status == 0 ? waitForCommandSuccess() : lidarStatusFailure(status);
+        applyCommand(DisableLivoxLidarGlassHeat(handle, configurationSetCallback, this));
         // No feedback from QueryLivoxLidarInternalInfo
     }
 
@@ -459,15 +487,14 @@ bool Task::configureLidar()
             LOG_INFO_S << "Enabling IMU publisher."
                        << " Current: " << m_lidar_state_info.imu_data_en
                        << " desired: " << enable_imu << endl;
-            status = EnableLivoxLidarImuData(handle, configurationSetCallback, this);
-            status == 0 ? waitForCommandSuccess() : lidarStatusFailure(status);
+            applyCommand(EnableLivoxLidarImuData(handle, configurationSetCallback, this));
         }
         else if (!enable_imu && m_lidar_state_info.imu_data_en) {
             LOG_INFO_S << "Disabling IMU publisher."
                        << " Current: " << m_lidar_state_info.imu_data_en
                        << " desired: " << enable_imu << endl;
-            status = DisableLivoxLidarImuData(handle, configurationSetCallback, this);
-            status == 0 ? waitForCommandSuccess() : lidarStatusFailure(status);
+            applyCommand(
+                DisableLivoxLidarImuData(handle, configurationSetCallback, this));
         }
 
         if (enable_imu && !m_lidar_state_info.imu_data_en) {
@@ -480,14 +507,13 @@ bool Task::configureLidar()
         auto enable_fusa = _enable_fusa_function.get();
         if (enable_fusa) {
             LOG_INFO_S << "Enable Fusa function." << endl;
-            status = EnableLivoxLidarFusaFunciont(handle, configurationSetCallback, this);
-            status == 0 ? waitForCommandSuccess() : lidarStatusFailure(status);
+            applyCommand(
+                EnableLivoxLidarFusaFunciont(handle, configurationSetCallback, this));
         }
         else {
             LOG_INFO_S << "Disable Fusa function." << endl;
-            status =
-                DisableLivoxLidarFusaFunciont(handle, configurationSetCallback, this);
-            status == 0 ? waitForCommandSuccess() : lidarStatusFailure(status);
+            applyCommand(
+                DisableLivoxLidarFusaFunciont(handle, configurationSetCallback, this));
         }
         // No feedback from QueryLivoxLidarInternalInfo
     }

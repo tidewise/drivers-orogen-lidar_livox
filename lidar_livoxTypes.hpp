@@ -16,7 +16,7 @@ namespace lidar_livox {
 
     enum LidarModel {
         HAP_T1,
-        HAP_TX ,
+        HAP_TX,
         MID_360
     };
 
@@ -29,7 +29,7 @@ namespace lidar_livox {
         uint16_t point_data_port = 5700;
         // IMU data port
         uint16_t imu_data_port = 5800;
-        //Log data port
+        // Log data port
         uint16_t log_data_port = 5900;
     };
 
@@ -60,8 +60,8 @@ namespace lidar_livox {
     };
 
     enum ScanPattern {
-        NONE_REPETIVE = kLivoxLidarScanPatternNoneRepetive,
-        REPETIVE = kLivoxLidarScanPatternRepetive,
+        NON_REPETITIVE = kLivoxLidarScanPatternNoneRepetive,
+        REPETITIVE = kLivoxLidarScanPatternRepetive,
         LOW_FRAME_RATE = kLivoxLidarScanPatternRepetiveLowFrameRate
     };
 
@@ -110,7 +110,7 @@ namespace lidar_livox {
     };
 
     struct HostImuDataIPInfo {
-        char host_ip_addr[16] = {};        /**< IP address. */
+        char host_ip_addr[16] = {};       /**< IP address. */
         uint16_t host_imu_data_port = 0;  // resv
         uint16_t lidar_imu_data_port = 0; // resv
     };
@@ -132,6 +132,22 @@ namespace lidar_livox {
         uint8_t version_load[4] = {};
         uint8_t version_hardware[4] = {};
         uint8_t mac[6] = {};
+    };
+
+    enum LidarReturnCode {
+        SUCCESS =  0x00,
+        FAILURE =  0x01,
+        NOT_PERMIT_NOW =  0x02,
+        OUT_OF_RANGE =  0x03,
+        PARAM_NOTSUPPORT =  0x20,
+        PARAM_REBOOT_EFFECT =  0x21,
+        PARAM_RD_ONLY =  0x22,
+        PARAM_INVALID_LEN =  0x23,
+        PARAM_KEY_NUM_ERR =  0x24,
+        UPGRADE_PUB_KEY_ERROR =  0x30,
+        UPGRADE_DIGEST_ERROR =  0x31,
+        UPGRADE_FW_TYPE_ERROR =  0x32,
+        UPGRADE_FW_OUT_OF_RANGE =  0x33
     };
 }
 #endif

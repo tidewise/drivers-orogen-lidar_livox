@@ -30,7 +30,7 @@ task_context "Task" do
     property "number_of_measurements_per_pointcloud", "int"
 
     # timeout in milliseconds
-    property "timeout", "int", 1000
+    property "timeout", "/base/Time"
 
     # Pointcloud data type
     # This value is not allowed to be set during sampling,
