@@ -30,7 +30,7 @@ task_context "Task" do
     # https://github.com/Livox-SDK/Livox-SDK2/wiki/Livox-Viewer#1-color-coding-strategy
     property "pointcloud_with_color_based_on_reflexivity", "bool", false
 
-    property "frequency", "int", 10
+    property "integration_time", "base/Time"
 
     # timeout in milliseconds
     property "timeout", "/base/Time"

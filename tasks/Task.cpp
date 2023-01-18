@@ -230,8 +230,9 @@ void Task::convertPointcloud(LivoxLidarEthernetPacket const* data,
     F const* p_point_data,
     float unit_base)
 {
+    auto now = base::Time::now();
     if (m_point_cloud.time.isNull()) {
-        m_point_cloud.time = base::Time::now();
+        m_point_cloud.time = now;
     }
 
     for (uint32_t i = 0; i < data->dot_num; i++) {
@@ -248,10 +249,9 @@ void Task::convertPointcloud(LivoxLidarEthernetPacket const* data,
         }
     }
 
-    if (base::Time::now() - m_point_cloud.time >=
-        base::Time::fromSeconds(1.0 / _frequency.get())) {
+    if (now - m_point_cloud.time >= _integration_time.get()) {
         _point_cloud.write(m_point_cloud);
-        m_point_cloud.time = base::Time::now();
+        m_point_cloud.time = now;
         m_point_cloud.points.clear();
         m_point_cloud.colors.clear();
     }
