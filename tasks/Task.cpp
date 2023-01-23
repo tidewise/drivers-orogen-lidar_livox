@@ -118,8 +118,6 @@ bool Task::startHook()
     if (!TaskBase::startHook())
         return false;
 
-    updatePointcloudReceivedStatus(false);
-
     // Start Motor
     applyCommand(
         SetLivoxLidarWorkMode(handle, kLivoxLidarNormal, configurationSetCallback, this));
@@ -269,6 +267,7 @@ void Task::updatePointcloudReceivedStatus(bool status)
 void Task::waitForPointcloudSuccess()
 {
     unique_lock<std::mutex> lock(m_pointcloud_sync_mutex);
+    m_pointcloud_received = false;
     while (!m_pointcloud_received) {
         // At the moment if something fails, e.g. configuration or timeout and exception
         if (m_pointcloud_sync_condition.wait_for(lock,
@@ -296,10 +295,6 @@ void Task::processPointcloudData(LivoxLidarEthernetPacket const* data)
                 reinterpret_cast<LivoxLidarCartesianLowRawPoint const*>(data->data);
             convertPointcloud(data, p_point_data, 100);
         } break;
-
-        case kLivoxLidarSphericalCoordinateData:
-            LOG_ERROR_S << "Spherical Coordinate Data not implemented yet." << endl;
-            break;
 
         default:
             LOG_ERROR_S << "Unknown Data Type." << endl;

@@ -17,7 +17,6 @@ describe OroGen.lidar_livox.Task do
             have_one_new_sample(task.point_cloud_port)
         end
 
-
         pp output
         STDIN.readline
         puts "Does the output looks OK ?"
