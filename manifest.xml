@@ -1,17 +1,16 @@
 <package>
   <description brief="Communicates with lidar livox using drivers/lidar_livox_sdk">
-  
+
   </description>
   <author>Afonso da Fonseca Braga/afonso.braga@tidewise.io</author>
   <license></license>
   <url>http://</url>
   <logo>http://</logo>
   <depend package="base/cmake" />
-  <!--
-   To add any dependencies use the depend tag
-  <depend package="dummy-dependency-0" />
-	...
-  <depend package="dummy-dependency-n-1" />
-  <depend package="dummy-dependency-n" />
-  -->
+  <depend package="drivers/lidar_livox_sdk" />
+  <depend package="jsoncpp" />
+  <depend package="base/logging" />
+  <depend package="base/types" />
+
+  <test_depend name="tools/syskit" />
 </package>

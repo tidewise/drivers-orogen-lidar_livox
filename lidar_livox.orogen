@@ -4,52 +4,81 @@ name "lidar_livox"
 
 # If new data types need to be defined, they have to be put in a separate C++
 # header, and this header will be loaded here
-import_types_from "lidar_livoxTypes.hpp"
+
 # Finally, it is pretty common that headers are directly loaded from an external
 # library. In this case, the library must be first used (the name is the
 # library's pkg-config name) and then the header can be used. Following Rock
 # conventions, a common use-case would be:
 #
 # using_library "lidar_livox"
-# import_types_from "lidar_livox/CustomType.hpp"
+using_library "lidar_livox_sdk"
+import_types_from "livox_lidar_def.h"
+import_types_from "lidar_livoxTypes.hpp"
+using_library "jsoncpp", typekit: false
 
-# If this project uses data types that are defined in other oroGen projects,
-# these projects should be imported there as well.
 import_types_from "std"
-# import_types_from "base"
+import_types_from "base"
 
-# Declare a new task context (i.e., a component)
-#
-# The corresponding C++ class can be edited in tasks/Task.hpp and
-# tasks/Task.cpp, and will be put in the lidar_livox namespace.
 task_context "Task" do
-    # This is the default from now on, and should not be removed. Rock will
-    # transition to a setup where all components use a configuration step.
     needs_configuration
+    property "lidar_model", "/lidar_livox/LidarModel", "HAP_T1"
 
-    # A configuration property (here, a std::string). Its value can be retrieved
-    # in the C++ code with # _config_value.get() and _config_value.set(new_value).
-    property "config_value", "/std/string"
+    property "lidar_net_info", "/lidar_livox/LidarNetInfo"
+    property "host_net_info", "/lidar_livox/HostNetInfo"
 
-    # An input port, i.e. an object from which the component gets data from
-    # other components' outputs
-    #
-    # Data can be retrieved using _input.read(value), which returns true if data
-    # was available, and false otherwise. _input.connected() returns if this
-    # input is connected to an output or not.
-    input_port "input", "/std/string"
+    # base on:
+    # https://github.com/Livox-SDK/Livox-SDK2/wiki/Livox-Viewer#1-color-coding-strategy
+    property "pointcloud_with_color_based_on_reflexivity", "bool", false
 
-    # An output port, i.e. an object to which the component pushes data so that
-    # it is transmitted to other components' inputs
-    #
-    # Data can be written using _output.write(value). _output.connected() returns
-    # if this output is connected to an input or not.
-    output_port "output", "int"
+    property "integration_time", "base/Time"
 
-    # If you want that component's updateHook() to be executed when the "input"
-    # port gets data, uncomment this and comment the 'periodic' line
-    # port_driven "input"
-    # By default, the task will be periodic with a period of 0.1
-    periodic 0.1
+    # timeout in milliseconds
+    property "timeout", "/base/Time"
+
+    # Pointcloud data type
+    # This value is not allowed to be set during sampling,
+    # and default CartesianCoordinateHighData is restored after rebooting.
+    property "point_data_type", "/lidar_livox/PointDataType"
+
+    # Pattern mode:
+    # NoneRepetive: Non-repetitive scan
+    # Repetive: Repetitive scan
+    # LowFrameRate: Repetitive with low frame rate
+    # Note: After setting, the LiDAR needs to reboot, the default value is NoneRepetive
+    property "scan_pattern", "/lidar_livox/ScanPattern"
+
+    property "dual_emit", "bool", false
+
+    # Installation location of LiDAR on the user's system.
+    # This information is not processed internally by LiDAR.
+    property "install_attitude", "/lidar_livox/LidarInstallAttitude"
+
+    # Blind spot set(m)
+    # Note:
+    # 1. The range is 0.50-2.0m, default is 0.50m.
+    # 2. Save in ROM, take effect in real time.
+    # 3. It is not recommended to set this value in SAMPLING state.
+    property "blind_spot", "float", 0.50
+
+    # Glass heating enable option
+    # Note:
+    # 1. The heating can only be turned on for a maximum of 3 minutes at a power cycle
+    # time, otherwise the window heating mode will be automatically exited,
+    # and the heating request will not be responded.
+    # 2. Heating will not be performed in ERROR state.
+    property "enable_glass_heat", "bool", false
+
+    # IMU data push enable option
+    # Note:
+    # 1. For HAP Tx version, the default value is true.
+    # 2. Only works with HAP TX
+    property "enable_imu", "bool", true
+
+    # Fusa diagnostic function
+    # Default: disabled
+    # Note:
+    # Does not work with mid 360
+    property "enable_fusa_function", "bool", false
+
+    output_port "point_cloud", "/base/samples/Pointcloud"
 end
-
