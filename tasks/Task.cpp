@@ -78,7 +78,7 @@ void lidarInfoChangeCallback(const uint32_t handle,
     task.notifyCommandSuccess();
 }
 
-Task::Task(std::string const& name)
+Task::Task(string const& name)
     : TaskBase(name)
 {
 }
@@ -92,9 +92,9 @@ bool Task::configureHook()
     if (!TaskBase::configureHook())
         return false;
 
-    std::string file_name = manageJsonFile();
+    string file_name = manageJsonFile();
     if (!LivoxLidarSdkInit(file_name.c_str())) {
-        LOG_ERROR_S << "Failed to connect to Lidar!" << std::endl;
+        LOG_ERROR_S << "Failed to connect to Lidar!" << endl;
         LivoxLidarSdkUninit();
         return false;
     }
@@ -106,7 +106,7 @@ bool Task::configureHook()
     applyCommand(QueryLivoxLidarInternalInfo(handle, queryInternalInfoCallback, this));
 
     if (!configureLidar()) {
-        LOG_ERROR_S << "Failed to configure the lidar!" << std::endl;
+        LOG_ERROR_S << "Failed to configure the lidar!" << endl;
         return false;
     }
     LOG_INFO_S << "Finished configuration process!!!" << endl;
@@ -154,7 +154,7 @@ void Task::cleanupHook()
     TaskBase::cleanupHook();
 }
 
-std::string Task::manageJsonFile()
+string Task::manageJsonFile()
 {
     Json::Value data;
     Json::Value lidar;
@@ -203,19 +203,19 @@ std::string Task::manageJsonFile()
 
     while (true) {
         auto time = base::Time::now();
-        std::string file_name = "livox-" + getName() + "-" +
-                                time.toString(base::Time::Resolution::Milliseconds,
-                                    base::Time::DEFAULT_FORMAT) +
-                                ".json";
+        string file_name = "livox-" + getName() + "-" +
+                           time.toString(base::Time::Resolution::Milliseconds,
+                               base::Time::DEFAULT_FORMAT) +
+                           ".json";
         {
-            std::fstream file_id(file_name.c_str(), ios_base::in);
+            fstream file_id(file_name.c_str(), ios_base::in);
             if (file_id) {
                 usleep(10000);
                 continue;
             }
         }
 
-        std::fstream file_id(file_name.c_str(), ios_base::out);
+        fstream file_id(file_name.c_str(), ios_base::out);
         Json::StyledWriter styledWriter;
         file_id << styledWriter.write(data);
         return file_name;
@@ -258,7 +258,7 @@ void Task::convertPointcloud(LivoxLidarEthernetPacket const* data,
 void Task::updatePointcloudReceivedStatus(bool status)
 {
     {
-        unique_lock<std::mutex> lock(m_pointcloud_sync_mutex);
+        unique_lock<mutex> lock(m_pointcloud_sync_mutex);
         m_pointcloud_received = status;
     }
     m_pointcloud_sync_condition.notify_all();
@@ -266,13 +266,13 @@ void Task::updatePointcloudReceivedStatus(bool status)
 
 void Task::waitForPointcloudSuccess()
 {
-    unique_lock<std::mutex> lock(m_pointcloud_sync_mutex);
+    unique_lock<mutex> lock(m_pointcloud_sync_mutex);
     m_pointcloud_received = false;
     while (!m_pointcloud_received) {
         // At the moment if something fails, e.g. configuration or timeout and exception
         if (m_pointcloud_sync_condition.wait_for(lock,
-                static_cast<std::chrono::milliseconds>(
-                    _timeout.get().toMilliseconds())) == std::cv_status::timeout) {
+                static_cast<milliseconds>(_timeout.get().toMilliseconds())) ==
+            cv_status::timeout) {
             LOG_ERROR_S << "Still waiting for pointcloud." << endl;
         }
     }
@@ -331,7 +331,7 @@ base::Vector4d Task::colorByReflectivity(uint8_t reflectivity)
 
 void Task::notifyCommandSuccess()
 {
-    unique_lock<std::mutex> lock(m_command_sync_mutex);
+    unique_lock<mutex> lock(m_command_sync_mutex);
     m_command_completed = true;
     m_error_code = 0;
     m_command_sync_condition.notify_all();
@@ -339,7 +339,7 @@ void Task::notifyCommandSuccess()
 
 void Task::notifyCommandFailure(int error_code)
 {
-    unique_lock<std::mutex> lock(m_command_sync_mutex);
+    unique_lock<mutex> lock(m_command_sync_mutex);
     m_command_completed = true;
     m_error_code = error_code;
     m_command_sync_condition.notify_all();
@@ -347,27 +347,27 @@ void Task::notifyCommandFailure(int error_code)
 
 void Task::waitForCommandSuccess()
 {
-    unique_lock<std::mutex> lock(m_command_sync_mutex);
+    unique_lock<mutex> lock(m_command_sync_mutex);
     while (!m_command_completed) {
         // At the moment if something fails, e.g. configuration or timeout and exception
         // is thrown and the sensor component will quit.
         if (m_command_sync_condition.wait_for(lock,
-                static_cast<std::chrono::milliseconds>(
-                    _timeout.get().toMilliseconds())) == std::cv_status::timeout) {
+                static_cast<milliseconds>(_timeout.get().toMilliseconds())) ==
+            cv_status::timeout) {
             LOG_ERROR_S << "Error code: " << 4 << endl;
-            throw std::runtime_error(m_lidar_status.at(4));
+            throw runtime_error(m_lidar_status.at(4));
         }
     }
 
     if (m_error_code) {
         try {
             LOG_ERROR_S << "Error code: " << m_error_code << endl;
-            throw std::runtime_error(
+            throw runtime_error(
                 m_return_code.at(static_cast<LidarReturnCode>(m_error_code)));
         }
-        catch (const std::out_of_range& e) {
+        catch (const out_of_range& e) {
             LOG_ERROR_S << "Error code: " << m_error_code << endl;
-            throw std::runtime_error("Lidar Unkown error!");
+            throw runtime_error("Lidar Unkown error!");
         }
     }
 }
@@ -375,10 +375,10 @@ void Task::waitForCommandSuccess()
 void Task::lidarStatusFailure(livox_status status)
 {
     try {
-        throw std::runtime_error(m_lidar_status.at(status));
+        throw runtime_error(m_lidar_status.at(status));
     }
-    catch (const std::out_of_range& e) {
-        throw std::runtime_error("Lidar Unkown error!");
+    catch (const out_of_range& e) {
+        throw runtime_error("Lidar Unkown error!");
     }
 }
 
@@ -531,9 +531,9 @@ void Task::proccessInfoData(LivoxLidarDiagInternalInfoResponse* response)
                 m_lidar_state_info.pattern_mode = static_cast<ScanPattern>(kv->value[0]);
                 break;
             case kKeyLidarIPCfg: {
-                std::string ip_text =
-                    to_string(kv->value[0]) + "." + to_string(kv->value[1]) + "." +
-                    to_string(kv->value[2]) + "." + to_string(kv->value[3]);
+                string ip_text = to_string(kv->value[0]) + "." + to_string(kv->value[1]) +
+                                 "." + to_string(kv->value[2]) + "." +
+                                 to_string(kv->value[3]);
                 strcpy(m_lidar_state_info.livox_lidar_ip_info.ip_addr, ip_text.c_str());
                 ip_text = to_string(kv->value[4]) + "." + to_string(kv->value[5]) + "." +
                           to_string(kv->value[6]) + "." + to_string(kv->value[7]);
@@ -544,9 +544,9 @@ void Task::proccessInfoData(LivoxLidarDiagInternalInfoResponse* response)
                 break;
             }
             case kKeyLidarPointDataHostIPCfg: {
-                std::string ip_text =
-                    to_string(kv->value[0]) + "." + to_string(kv->value[1]) + "." +
-                    to_string(kv->value[2]) + "." + to_string(kv->value[3]);
+                string ip_text = to_string(kv->value[0]) + "." + to_string(kv->value[1]) +
+                                 "." + to_string(kv->value[2]) + "." +
+                                 to_string(kv->value[3]);
                 strcpy(m_lidar_state_info.host_point_ip_info.host_ip_addr,
                     ip_text.c_str());
                 memcpy(&(m_lidar_state_info.host_point_ip_info.host_point_data_port),
@@ -558,9 +558,9 @@ void Task::proccessInfoData(LivoxLidarDiagInternalInfoResponse* response)
                 break;
             }
             case kKeyLidarImuHostIPCfg: {
-                std::string ip_text =
-                    to_string(kv->value[0]) + "." + to_string(kv->value[1]) + "." +
-                    to_string(kv->value[2]) + "." + to_string(kv->value[3]);
+                string ip_text = to_string(kv->value[0]) + "." + to_string(kv->value[1]) +
+                                 "." + to_string(kv->value[2]) + "." +
+                                 to_string(kv->value[3]);
                 strcpy(m_lidar_state_info.host_imu_data_ip_info.host_ip_addr,
                     ip_text.c_str());
                 memcpy(&(m_lidar_state_info.host_imu_data_ip_info.host_imu_data_port),
